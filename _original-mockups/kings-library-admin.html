@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>King's Library — Admin Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,500;0,7..72,600;0,7..72,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0A121C;
+    --ink-soft: #141F2C;
+    --ink-softer: #1B2836;
+    --gold: #C79A42;
+    --gold-bright: #F0C25E;
+    --text-on-ink: #E9E2D0;
+    --text-on-ink-dim: #93A0A8;
+    --green: #5C9E6B;
+    --red: #C4574A;
+    --serif: 'Literata', Georgia, serif;
+    --sans: 'Inter', -apple-system, sans-serif;
+    --radius: 5px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(ellipse at 50% 0%, #17263A 0%, #0A121C 55%, #060B12 100%);
+    color: var(--text-on-ink);
+    font-family: var(--sans);
+    display: flex;
+    min-height: 100vh;
+  }
+
+  body.light-admin {
+    --ink-soft: #ECE3CC;
+    --ink-softer: #E3D9BE;
+    --gold: #9C7530;
+    --gold-bright: #B4863A;
+    --text-on-ink: #241E14;
+    --text-on-ink-dim: #6B5F49;
+    background: radial-gradient(ellipse at 50% 0%, #FBF6E9 0%, #F2E9D3 55%, #EBDFC1 100%);
+  }
+  body.light-admin .sidebar { background: rgba(251,246,233,0.6); border-right-color: rgba(36,30,20,0.08); }
+  body.light-admin .stat-card, body.light-admin .panel-block { background: var(--ink-soft); border-color: rgba(36,30,20,0.07); }
+  body.light-admin th { border-bottom-color: rgba(36,30,20,0.1); }
+  body.light-admin td { border-bottom-color: rgba(36,30,20,0.06); }
+  body.light-admin .price-input, body.light-admin .form-field input, body.light-admin .form-field select, body.light-admin .form-field textarea { background: var(--ink-softer); border-color: rgba(36,30,20,0.14); }
+  body.light-admin .upload-box { background: var(--ink-softer); border-color: rgba(36,30,20,0.2); }
+  body.light-admin .access-check-item { background: var(--ink-softer); border-color: rgba(36,30,20,0.12); }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    width: 220px; flex-shrink: 0;
+    background: rgba(10,18,28,0.6);
+    border-right: 1px solid rgba(233,226,208,0.08);
+    padding: 22px 16px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .sidebar-brand { display: flex; align-items: center; gap: 10px; font-family: var(--serif); font-size: 16px; font-weight: 600; padding: 0 8px 20px; }
+  .sidebar-brand img {
+    width: 30px; height: 30px; border-radius: 50%; object-fit: cover;
+    background: radial-gradient(circle at 35% 30%, #FFFCF2, #F0E6C8 70%);
+    border: 1.5px solid var(--gold-bright);
+    box-shadow: 0 0 0 3px rgba(10,18,28,0.9), 0 2px 8px rgba(240,194,94,0.25);
+  }
+  body.light-admin .sidebar-brand img { box-shadow: 0 0 0 3px rgba(251,246,233,0.9), 0 2px 8px rgba(180,134,58,0.2); }
+  .theme-toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 8px 18px; margin-bottom: 6px; border-bottom: 1px solid rgba(233,226,208,0.08);
+  }
+  body.light-admin .theme-toggle-row { border-bottom-color: rgba(36,30,20,0.08); }
+  .theme-toggle-row span { font-size: 11.5px; color: var(--text-on-ink-dim); }
+  .sidebar-theme-btn {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    background: var(--ink-soft); border: 1px solid rgba(233,226,208,0.1); border-radius: 50%;
+    color: var(--gold-bright); cursor: pointer;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: var(--radius);
+    font-size: 13.5px; color: var(--text-on-ink-dim); cursor: pointer;
+    background: none; border: none; width: 100%; text-align: left; font-family: var(--sans);
+  }
+  .nav-item:hover { background: rgba(233,226,208,0.04); color: var(--text-on-ink); }
+  .nav-item.active { background: rgba(212,175,106,0.12); color: var(--gold-bright); }
+  .nav-item svg { flex-shrink: 0; }
+
+  /* ---------- Main ---------- */
+  .main { flex: 1; padding: 28px 40px 60px; overflow-y: auto; max-height: 100vh; }
+  .page-head { margin-bottom: 26px; }
+  .page-head h1 { font-family: var(--serif); font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+  .page-head p { font-size: 13px; color: var(--text-on-ink-dim); }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ---------- Dashboard stat cards ---------- */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 18px; margin-bottom: 34px; }
+  .stat-card { background: var(--ink-soft); border: 1px solid rgba(233,226,208,0.07); border-radius: 10px; padding: 20px; }
+  .stat-card .stat-label { font-size: 12px; color: var(--text-on-ink-dim); margin-bottom: 8px; }
+  .stat-card .stat-value { font-family: var(--serif); font-size: 28px; font-weight: 600; color: var(--gold-bright); }
+
+  .panel-block { background: var(--ink-soft); border: 1px solid rgba(233,226,208,0.07); border-radius: 10px; padding: 22px; margin-bottom: 24px; }
+  .panel-block h3 { font-family: var(--serif); font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+
+  /* ---------- Tables ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--text-on-ink-dim); font-weight: 500; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 10px; border-bottom: 1px solid rgba(233,226,208,0.08); }
+  td { padding: 12px 10px; border-bottom: 1px solid rgba(233,226,208,0.05); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .row-cover { width: 30px; height: 42px; border-radius: 2px 4px 4px 2px; display: inline-block; vertical-align: middle; margin-right: 10px; }
+  .cell-title-wrap { display: flex; align-items: center; }
+  .cell-title-text .t-main { font-weight: 500; }
+  .cell-title-text .t-sub { font-size: 11.5px; color: var(--text-on-ink-dim); }
+
+  .price-input {
+    width: 80px; background: var(--ink-softer); border: 1px solid rgba(233,226,208,0.12);
+    border-radius: 4px; color: var(--text-on-ink); font-family: var(--sans); font-size: 12.5px; padding: 6px 8px; outline: none;
+  }
+  .price-input:focus { border-color: var(--gold-bright); }
+  .price-input::placeholder { color: var(--text-on-ink-dim); }
+
+  .btn { padding: 7px 13px; border-radius: 5px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; font-family: var(--sans); }
+  .btn-gold { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); color: #1B140A; }
+  .btn-outline { background: none; border: 1px solid rgba(233,226,208,0.16); color: var(--text-on-ink); }
+  .btn-outline:hover { border-color: var(--gold-bright); color: var(--gold-bright); }
+  .btn-danger-outline { background: none; border: 1px solid rgba(196,87,74,0.4); color: var(--red); }
+  .btn-danger-outline:hover { background: rgba(196,87,74,0.1); }
+  .btn-tiny { padding: 5px 10px; font-size: 11px; }
+
+  .lang-tag { font-size: 10.5px; color: var(--gold-bright); border: 1px solid rgba(212,175,106,0.35); border-radius: 20px; padding: 2px 8px; }
+  .badge-owned { font-size: 10.5px; color: var(--green); border: 1px solid rgba(92,158,107,0.4); border-radius: 20px; padding: 2px 8px; }
+  .badge-locked { font-size: 10.5px; color: var(--text-on-ink-dim); border: 1px solid rgba(233,226,208,0.14); border-radius: 20px; padding: 2px 8px; }
+
+  /* ---------- Forms ---------- */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-field.full { grid-column: 1 / -1; }
+  .form-field label { font-size: 11.5px; color: var(--text-on-ink-dim); }
+  .form-field input, .form-field select, .form-field textarea {
+    background: var(--ink-softer); border: 1px solid rgba(233,226,208,0.12); border-radius: 5px;
+    color: var(--text-on-ink); font-family: var(--sans); font-size: 13px; padding: 9px 11px; outline: none;
+  }
+  .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--gold-bright); }
+  .form-field textarea { resize: vertical; min-height: 70px; font-family: var(--serif); }
+  .color-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch { width: 26px; height: 26px; border-radius: 5px; cursor: pointer; border: 2px solid transparent; }
+  .swatch.selected { border-color: var(--gold-bright); }
+
+  .access-checks { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+  .access-check-item { display: flex; align-items: center; gap: 6px; background: var(--ink-softer); border: 1px solid rgba(233,226,208,0.1); border-radius: 20px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .access-check-item input { accent-color: var(--gold-bright); }
+
+  .upload-box {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--ink-softer);
+    border: 1.5px dashed rgba(233,226,208,0.2);
+    border-radius: 8px;
+    padding: 16px;
+    cursor: pointer;
+    color: var(--text-on-ink-dim);
+    font-size: 13px;
+  }
+  .upload-box:hover { border-color: var(--gold-bright); color: var(--gold-bright); }
+  .upload-box.has-file { border-style: solid; border-color: rgba(92,158,107,0.4); color: var(--text-on-ink); }
+  .upload-status { margin-top: 8px; font-size: 12px; color: var(--text-on-ink-dim); }
+  .upload-status .fmt-badge {
+    display: inline-block; font-size: 10.5px; color: var(--gold-bright);
+    border: 1px solid rgba(212,175,106,0.35); border-radius: 20px; padding: 1px 8px; margin-right: 6px;
+  }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--ink-soft); border: 1px solid rgba(212,175,106,0.3); color: var(--text-on-ink); padding: 12px 20px; border-radius: 8px; font-size: 12.5px; opacity: 0; pointer-events: none; transition: all .25s ease; z-index: 100; max-width: 360px; text-align: center; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .log-entry { padding: 13px 0; border-bottom: 1px solid rgba(233,226,208,0.06); font-size: 12.5px; }
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry .log-time { color: var(--text-on-ink-dim); font-size: 11px; margin-bottom: 4px; }
+  .log-entry .log-body strong { color: var(--gold-bright); }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(233,226,208,0.15); border-radius: 4px; }
+
+  @media (max-width: 800px) {
+    .sidebar { display: none; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="sidebar-brand"><img src="data:image/png;base64,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" alt="logo">King's Library</div>
+    <div class="theme-toggle-row">
+      <span>Theme</span>
+      <button class="sidebar-theme-btn" id="adminThemeToggle" title="Switch light/dark mode">
+        <svg id="adminThemeMoon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+        <svg id="adminThemeSun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+    </div>
+    <button class="nav-item active" data-view="dashboard" onclick="showView('dashboard')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" data-view="books" onclick="showView('books')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Manage Books
+    </button>
+    <button class="nav-item" data-view="podcasts" onclick="showView('podcasts')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4"/></svg>
+      Manage Podcasts
+    </button>
+    <button class="nav-item" data-view="readers" onclick="showView('readers')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
+      Manage Readers
+    </button>
+    <button class="nav-item" data-view="log" onclick="showView('log')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+      Access Log
+    </button>
+    <button class="nav-item" data-view="notify" onclick="showView('notify')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      Notifications
+    </button>
+    <button class="nav-item" data-view="uilang" onclick="showView('uilang')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>
+      App Languages
+    </button>
+  </div>
+
+  <div class="main">
+
+    <!-- DASHBOARD -->
+    <div id="dashboardView" class="view active">
+      <div class="page-head"><h1>Dashboard</h1><p>A quick look at King's Library.</p></div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Total Books</div><div class="stat-value" id="statBooks">0</div></div>
+        <div class="stat-card"><div class="stat-label">Total Readers</div><div class="stat-value" id="statReaders">0</div></div>
+        <div class="stat-card"><div class="stat-label">Books Sold</div><div class="stat-value" id="statSold">0</div></div>
+        <div class="stat-card"><div class="stat-label">Total Revenue</div><div class="stat-value" id="statRevenue">₹0</div></div>
+      </div>
+      <div class="panel-block">
+        <h3>Recent Activity</h3>
+        <div id="dashboardLog"></div>
+      </div>
+    </div>
+
+    <!-- MANAGE BOOKS -->
+    <div id="booksView" class="view">
+      <div class="page-head"><h1>Manage Books</h1><p>Add new books, edit details, and set the price for each one.</p></div>
+
+      <div class="panel-block">
+        <h3>Add a New Book</h3>
+        <div class="form-grid">
+          <div class="form-field"><label>Title</label><input type="text" id="newBookTitle" placeholder="Book title"></div>
+          <div class="form-field"><label>Author</label><input type="text" id="newBookAuthor" placeholder="Author name"></div>
+          <div class="form-field"><label>Language</label><input type="text" id="newBookLang" placeholder="e.g. English, Hindi, Arabic"></div>
+          <div class="form-field"><label>Price (₹)</label><input type="number" id="newBookPrice" placeholder="Decide later — leave blank"></div>
+          <div class="form-field full">
+            <label>Cover Color (used if no image is uploaded)</label>
+            <div class="color-swatches" id="colorSwatches"></div>
+          </div>
+          <div class="form-field full">
+            <label>Cover Image (optional — overrides the color above)</label>
+            <div class="upload-box" id="bookImageUploadBox">
+              <input type="file" id="bookImageInput" accept="image/*" style="display:none;">
+              <img id="bookImagePreview" style="display:none; width:44px; height:44px; border-radius:6px; object-fit:cover;">
+              <svg id="bookImageIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              <span id="bookImageUploadText">Click to choose a cover image — JPG or PNG</span>
+            </div>
+          </div>
+          <div class="form-field full">
+            <label>Upload the book file (EPUB, Word, or PDF)</label>
+            <div class="upload-box" id="uploadBox">
+              <input type="file" id="bookFileInput" accept=".epub,.docx,.pdf" style="display:none;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              <span id="uploadBoxText">Click to choose a file — .epub, .docx, or .pdf</span>
+            </div>
+            <div id="uploadStatus" class="upload-status"></div>
+          </div>
+          <div class="form-field full"><label>Sample text / first chapter (optional — or fill in automatically from your uploaded file once the backend is connected)</label><textarea id="newBookContent" placeholder="Paste or type the opening of the book..."></textarea></div>
+        </div>
+        <button class="btn btn-gold" onclick="addBook()">Add Book</button>
+      </div>
+
+      <div class="panel-block">
+        <h3>All Books</h3>
+        <table>
+          <thead><tr><th>Book</th><th>Language</th><th>Price (₹)</th><th>Actions</th></tr></thead>
+          <tbody id="booksTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MANAGE PODCASTS -->
+    <div id="podcastsView" class="view">
+      <div class="page-head"><h1>Manage Podcasts</h1><p>Add new podcast episodes and set a price for each.</p></div>
+
+      <div class="panel-block">
+        <h3>Add a New Podcast Episode</h3>
+        <div class="form-grid">
+          <div class="form-field"><label>Title</label><input type="text" id="newPodTitle" placeholder="Episode title"></div>
+          <div class="form-field"><label>Host</label><input type="text" id="newPodHost" placeholder="Host name"></div>
+          <div class="form-field"><label>Language</label><input type="text" id="newPodLang" placeholder="e.g. English, Hindi, Punjabi"></div>
+          <div class="form-field"><label>Price (₹)</label><input type="number" id="newPodPrice" placeholder="Decide later — leave blank"></div>
+          <div class="form-field full">
+            <label>Cover Color (used if no image is uploaded)</label>
+            <div class="color-swatches" id="podColorSwatches"></div>
+          </div>
+          <div class="form-field full">
+            <label>Cover Image (optional — overrides the color above)</label>
+            <div class="upload-box" id="podImageUploadBox">
+              <input type="file" id="podImageInput" accept="image/*" style="display:none;">
+              <img id="podImagePreview" style="display:none; width:44px; height:44px; border-radius:6px; object-fit:cover;">
+              <svg id="podImageIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              <span id="podImageUploadText">Click to choose a cover image — JPG or PNG</span>
+            </div>
+          </div>
+          <div class="form-field full">
+            <label>Upload the audio file (MP3, WAV, or M4A)</label>
+            <div class="upload-box" id="podUploadBox">
+              <input type="file" id="podFileInput" accept=".mp3,.wav,.m4a" style="display:none;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              <span id="podUploadBoxText">Click to choose an audio file — .mp3, .wav, or .m4a</span>
+            </div>
+            <div id="podUploadStatus" class="upload-status"></div>
+          </div>
+        </div>
+        <button class="btn btn-gold" onclick="addPodcast()">Add Podcast</button>
+      </div>
+
+      <div class="panel-block">
+        <h3>All Podcasts</h3>
+        <table>
+          <thead><tr><th>Episode</th><th>Language</th><th>Price (₹)</th><th>Actions</th></tr></thead>
+          <tbody id="podcastsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MANAGE READERS -->
+    <div id="readersView" class="view">
+      <div class="page-head"><h1>Manage Readers</h1><p>Grant a reader access after they purchase. This sends them the app link and an OTP to sign in.</p></div>
+
+      <div class="panel-block">
+        <h3>Grant Access to a Reader</h3>
+        <div class="form-grid">
+          <div class="form-field full"><label>Reader's registered email</label><input type="email" id="grantEmail" placeholder="reader@example.com"></div>
+          <div class="form-field full">
+            <label>Books to grant</label>
+            <div class="access-checks" id="grantBookChecks"></div>
+          </div>
+          <div class="form-field full">
+            <label>Podcasts to grant</label>
+            <div class="access-checks" id="grantPodChecks"></div>
+          </div>
+        </div>
+        <button class="btn btn-gold" onclick="grantAccess()">Grant Access &amp; Send App + OTP</button>
+      </div>
+
+      <div class="panel-block">
+        <h3>All Readers</h3>
+        <table>
+          <thead><tr><th>Email</th><th>Books Owned</th><th>Actions</th></tr></thead>
+          <tbody id="readersTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ACCESS LOG -->
+    <div id="logView" class="view">
+      <div class="page-head"><h1>Access Log</h1><p>A simulated record of app links and OTPs sent to readers. Real email sending connects here once the backend is built.</p></div>
+      <div class="panel-block">
+        <div id="fullLog"></div>
+      </div>
+    </div>
+
+    <!-- NOTIFICATIONS -->
+    <div id="notifyView" class="view">
+      <div class="page-head"><h1>Send Notification</h1><p>Let readers know when a new book arrives. This is a demo of the screen — real sending needs the backend.</p></div>
+
+      <div class="panel-block">
+        <h3>New Notification</h3>
+        <div class="form-grid">
+          <div class="form-field full"><label>Title</label><input type="text" id="notifTitle" placeholder="e.g. New Book: The Silent Hymn is here!"></div>
+          <div class="form-field full"><label>Message</label><textarea id="notifMsg" placeholder="A short line about the new book..." style="font-family:var(--sans); min-height:60px;"></textarea></div>
+          <div class="form-field">
+            <label>Link to a book (optional)</label>
+            <select id="notifBookLink"><option value="">No specific book</option></select>
+          </div>
+          <div class="form-field">
+            <label>Send to</label>
+            <select id="notifAudience">
+              <option value="all">All readers</option>
+              <option value="one">One specific reader</option>
+            </select>
+          </div>
+          <div class="form-field full" id="notifSingleEmailField" style="display:none;">
+            <label>Reader's email</label>
+            <input type="email" id="notifSingleEmail" placeholder="reader@example.com">
+          </div>
+        </div>
+        <button class="btn btn-gold" onclick="sendNotification()">Send Notification</button>
+      </div>
+
+      <div class="panel-block">
+        <h3>Sent Notifications</h3>
+        <div id="notifSentLog"></div>
+      </div>
+    </div>
+
+    <!-- APP LANGUAGES -->
+    <div id="uilangView" class="view">
+      <div class="page-head"><h1>App Languages</h1><p>These are the languages readers can switch the app and website's interface to — not the book/podcast content languages, which are set per item.</p></div>
+
+      <div class="panel-block">
+        <h3>Currently Supported</h3>
+        <table>
+          <thead><tr><th>Language</th><th>Status</th></tr></thead>
+          <tbody id="uiLangTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel-block">
+        <h3>Request a New Interface Language</h3>
+        <div class="form-grid">
+          <div class="form-field"><label>Language name</label><input type="text" id="newUiLangName" placeholder="e.g. Tamil, Bengali, Urdu"></div>
+        </div>
+        <button class="btn btn-gold" onclick="addUiLanguage()">Add to Request List</button>
+        <p style="font-size:11.5px;color:var(--text-on-ink-dim);margin-top:10px;">Adding a language here queues it for translation — it won't appear live in the app until the real translation text is added during the backend build.</p>
+      </div>
+
+      <div class="panel-block">
+        <h3>Requested / In Progress</h3>
+        <div id="uiLangRequestedList"></div>
+      </div>
+    </div>
+
+  </div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const COVER_COLORS = ["#3E5A78","#7A4A3A","#4A5D45","#8B6F3E","#5C4A78","#6B3E4A","#3E6B5A","#8B5A3E","#4A5D78","#7A3E5C","#5A4A8B","#6B5A3E"];
+
+let BOOKS = [
+  { id:'b1', title:"The Silent Hymn", author:"M. Okafor", lang:"English", price:199, coverColor:"#3E5A78" },
+  { id:'b2', title:"जीवन का गीत", author:"अनिता शर्मा", lang:"Hindi", price:149, coverColor:"#7A4A3A" },
+  { id:'b3', title:"ਜ਼ਿੰਦਗੀ ਦਾ ਗੀਤ", author:"ਹਰਪ੍ਰੀਤ ਕੌਰ", lang:"Punjabi", price:159, coverColor:"#4A5D45" },
+  { id:'b5', title:"Letters to a Young Composer", author:"R. Whitfield", lang:"English", price:299, coverColor:"#5C4A78" },
+];
+
+let READERS = [
+  { email:"priya.sharma@example.com", owned:['b1','b2'], ownedPods:['p1'] },
+  { email:"amit.k@example.com", owned:['b1'], ownedPods:[] },
+];
+
+let PODCASTS = [
+  { id:'p1', title:"Hymns Behind the Story", host:"King's Library Studio", lang:"English", price:99, coverColor:"#3E5A78" },
+  { id:'p2', title:"ਸੰਗੀਤ ਦੀਆਂ ਗੱਲਾਂ", host:"ਹਰਪ੍ਰੀਤ ਕੌਰ", lang:"Punjabi", price:79, coverColor:"#4A5D45" },
+  { id:'p3', title:"लेखक से बातचीत", host:"अनिता शर्मा", lang:"Hindi", price:79, coverColor:"#7A4A3A" },
+];
+
+let LOG = [
+  { time:"Today, 9:12 AM", body:"Granted <strong>The Silent Hymn</strong> to <strong>priya.sharma@example.com</strong> — app link + OTP sent." },
+  { time:"Today, 9:13 AM", body:"Granted <strong>जीवन का गीत</strong> to <strong>priya.sharma@example.com</strong> — app link + OTP sent." },
+  { time:"Yesterday, 6:40 PM", body:"Granted <strong>The Silent Hymn</strong> to <strong>amit.k@example.com</strong> — app link + OTP sent." },
+];
+
+let selectedColor = COVER_COLORS[0];
+
+/* ---------- Navigation ---------- */
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(name + 'View').classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelector(`.nav-item[data-view="${name}"]`).classList.add('active');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+/* ---------- Dashboard ---------- */
+function renderDashboard() {
+  document.getElementById('statBooks').textContent = BOOKS.length;
+  document.getElementById('statReaders').textContent = READERS.length;
+  const totalSold = READERS.reduce((sum, r) => sum + r.owned.length + (r.ownedPods || []).length, 0);
+  document.getElementById('statSold').textContent = totalSold;
+  const revenue = READERS.reduce((sum, r) => {
+    const bookRev = r.owned.reduce((s2, bid) => {
+      const b = BOOKS.find(x => x.id === bid);
+      return s2 + (b && b.price ? b.price : 0);
+    }, 0);
+    const podRev = (r.ownedPods || []).reduce((s2, pid) => {
+      const p = PODCASTS.find(x => x.id === pid);
+      return s2 + (p && p.price ? p.price : 0);
+    }, 0);
+    return sum + bookRev + podRev;
+  }, 0);
+  document.getElementById('statRevenue').textContent = '₹' + revenue.toLocaleString('en-IN');
+
+  document.getElementById('dashboardLog').innerHTML = LOG.slice(0, 4).map(l =>
+    `<div class="log-entry"><div class="log-time">${l.time}</div><div class="log-body">${l.body}</div></div>`
+  ).join('') || '<p style="color:var(--text-on-ink-dim);font-size:13px;">No activity yet.</p>';
+}
+
+/* ---------- Books ---------- */
+function renderColorSwatches() {
+  document.getElementById('colorSwatches').innerHTML = COVER_COLORS.map(c =>
+    `<div class="swatch${c === selectedColor ? ' selected' : ''}" style="background:${c}" data-color="${c}"></div>`
+  ).join('');
+  document.querySelectorAll('#colorSwatches .swatch').forEach(sw => {
+    sw.addEventListener('click', () => { selectedColor = sw.dataset.color; renderColorSwatches(); });
+  });
+}
+
+function renderBooksTable() {
+  document.getElementById('booksTableBody').innerHTML = BOOKS.map(b => `
+    <tr>
+      <td>
+        <div class="cell-title-wrap">
+          <span class="row-cover" style="${b.coverImage ? `background-image:url('${b.coverImage}');background-size:cover;background-position:center;` : `background:${b.coverColor}`}"></span>
+          <div class="cell-title-text">
+            <div class="t-main">${b.title}</div>
+            <div class="t-sub">${b.author}</div>
+          </div>
+        </div>
+      </td>
+      <td><span class="lang-tag">${b.lang}</span></td>
+      <td><input type="number" class="price-input" value="${b.price ?? ''}" placeholder="TBD" data-id="${b.id}" onchange="updatePrice('${b.id}', this.value)"></td>
+      <td><button class="btn btn-danger-outline btn-tiny" onclick="deleteBook('${b.id}')">Remove</button></td>
+    </tr>
+  `).join('');
+}
+
+function updatePrice(id, val) {
+  const book = BOOKS.find(b => b.id === id);
+  book.price = val === '' ? null : Number(val);
+  renderDashboard();
+  showToast(`Price updated for "${book.title}".`);
+}
+
+function deleteBook(id) {
+  const book = BOOKS.find(b => b.id === id);
+  BOOKS = BOOKS.filter(b => b.id !== id);
+  renderBooksTable();
+  renderGrantBookChecks();
+  renderDashboard();
+  renderNotifBookOptions();
+  showToast(`"${book.title}" removed from the library.`);
+}
+
+function addBook() {
+  const title = document.getElementById('newBookTitle').value.trim();
+  const author = document.getElementById('newBookAuthor').value.trim();
+  const lang = document.getElementById('newBookLang').value.trim();
+  const priceVal = document.getElementById('newBookPrice').value;
+
+  if (!title || !author || !lang) {
+    showToast('Please fill in at least Title, Author, and Language.');
+    return;
+  }
+
+  const newBook = {
+    id: 'b' + (Date.now()),
+    title, author, lang,
+    price: priceVal === '' ? null : Number(priceVal),
+    coverColor: selectedColor,
+    coverImage: selectedBookImageDataUrl
+  };
+  BOOKS.push(newBook);
+
+  document.getElementById('newBookTitle').value = '';
+  document.getElementById('newBookAuthor').value = '';
+  document.getElementById('newBookLang').value = '';
+  document.getElementById('newBookPrice').value = '';
+  document.getElementById('newBookContent').value = '';
+  bookFileInput.value = '';
+  uploadBox.classList.remove('has-file');
+  document.getElementById('uploadBoxText').textContent = 'Click to choose a file — .epub, .docx, or .pdf';
+  document.getElementById('uploadStatus').innerHTML = '';
+
+  bookImageInput.value = '';
+  bookImageUploadBox.classList.remove('has-file');
+  document.getElementById('bookImagePreview').style.display = 'none';
+  document.getElementById('bookImageIcon').style.display = 'block';
+  document.getElementById('bookImageUploadText').textContent = 'Click to choose a cover image — JPG or PNG';
+  selectedBookImageDataUrl = null;
+
+  renderBooksTable();
+  renderGrantBookChecks();
+  renderDashboard();
+  renderNotifBookOptions();
+  showToast(selectedFileName ? `"${title}" added from ${selectedFileName}.` : `"${title}" added to King's Library.`);
+  selectedFileName = null;
+}
+
+/* ---------- Podcasts ---------- */
+let selectedPodColor = COVER_COLORS[3];
+let selectedPodFileName = null;
+let selectedPodImageDataUrl = null;
+
+function renderPodColorSwatches() {
+  document.getElementById('podColorSwatches').innerHTML = COVER_COLORS.map(c =>
+    `<div class="swatch${c === selectedPodColor ? ' selected' : ''}" style="background:${c}" data-color="${c}"></div>`
+  ).join('');
+  document.querySelectorAll('#podColorSwatches .swatch').forEach(sw => {
+    sw.addEventListener('click', () => { selectedPodColor = sw.dataset.color; renderPodColorSwatches(); });
+  });
+}
+
+function renderPodcastsTable() {
+  document.getElementById('podcastsTableBody').innerHTML = PODCASTS.map(p => `
+    <tr>
+      <td>
+        <div class="cell-title-wrap">
+          <span class="row-cover" style="${p.coverImage ? `background-image:url('${p.coverImage}');background-size:cover;background-position:center;` : `background:${p.coverColor}`}"></span>
+          <div class="cell-title-text">
+            <div class="t-main">${p.title}</div>
+            <div class="t-sub">${p.host}</div>
+          </div>
+        </div>
+      </td>
+      <td><span class="lang-tag">${p.lang}</span></td>
+      <td><input type="number" class="price-input" value="${p.price ?? ''}" placeholder="TBD" data-id="${p.id}" onchange="updatePodPrice('${p.id}', this.value)"></td>
+      <td><button class="btn btn-danger-outline btn-tiny" onclick="deletePodcast('${p.id}')">Remove</button></td>
+    </tr>
+  `).join('');
+}
+
+function updatePodPrice(id, val) {
+  const pod = PODCASTS.find(p => p.id === id);
+  pod.price = val === '' ? null : Number(val);
+  renderDashboard();
+  showToast(`Price updated for "${pod.title}".`);
+}
+
+function deletePodcast(id) {
+  const pod = PODCASTS.find(p => p.id === id);
+  PODCASTS = PODCASTS.filter(p => p.id !== id);
+  renderPodcastsTable();
+  renderGrantPodChecks();
+  renderDashboard();
+  showToast(`"${pod.title}" removed from Podcasts.`);
+}
+
+const podUploadBox = document.getElementById('podUploadBox');
+const podFileInput = document.getElementById('podFileInput');
+podUploadBox.addEventListener('click', () => podFileInput.click());
+podFileInput.addEventListener('change', () => {
+  const file = podFileInput.files[0];
+  const statusEl = document.getElementById('podUploadStatus');
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  selectedPodFileName = file.name;
+  podUploadBox.classList.add('has-file');
+  document.getElementById('podUploadBoxText').textContent = file.name;
+  statusEl.innerHTML = `<span class="fmt-badge">${ext.toUpperCase()}</span> Audio file received.`;
+});
+
+const podImageUploadBox = document.getElementById('podImageUploadBox');
+const podImageInput = document.getElementById('podImageInput');
+podImageUploadBox.addEventListener('click', () => podImageInput.click());
+podImageInput.addEventListener('change', () => {
+  const file = podImageInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    selectedPodImageDataUrl = e.target.result;
+    const preview = document.getElementById('podImagePreview');
+    preview.src = selectedPodImageDataUrl;
+    preview.style.display = 'block';
+    document.getElementById('podImageIcon').style.display = 'none';
+    document.getElementById('podImageUploadText').textContent = file.name;
+    podImageUploadBox.classList.add('has-file');
+  };
+  reader.readAsDataURL(file);
+});
+
+function addPodcast() {
+  const title = document.getElementById('newPodTitle').value.trim();
+  const host = document.getElementById('newPodHost').value.trim();
+  const lang = document.getElementById('newPodLang').value.trim();
+  const priceVal = document.getElementById('newPodPrice').value;
+
+  if (!title || !host || !lang) {
+    showToast('Please fill in at least Title, Host, and Language.');
+    return;
+  }
+
+  PODCASTS.push({
+    id: 'p' + (Date.now()),
+    title, host, lang,
+    price: priceVal === '' ? null : Number(priceVal),
+    coverColor: selectedPodColor,
+    coverImage: selectedPodImageDataUrl
+  });
+
+  document.getElementById('newPodTitle').value = '';
+  document.getElementById('newPodHost').value = '';
+  document.getElementById('newPodLang').value = '';
+  document.getElementById('newPodPrice').value = '';
+  podFileInput.value = '';
+  podUploadBox.classList.remove('has-file');
+  document.getElementById('podUploadBoxText').textContent = 'Click to choose an audio file — .mp3, .wav, or .m4a';
+  document.getElementById('podUploadStatus').innerHTML = '';
+
+  podImageInput.value = '';
+  podImageUploadBox.classList.remove('has-file');
+  document.getElementById('podImagePreview').style.display = 'none';
+  document.getElementById('podImageIcon').style.display = 'block';
+  document.getElementById('podImageUploadText').textContent = 'Click to choose a cover image — JPG or PNG';
+  selectedPodImageDataUrl = null;
+
+  renderPodcastsTable();
+  renderGrantPodChecks();
+  renderDashboard();
+  showToast(selectedPodFileName ? `"${title}" added from ${selectedPodFileName}.` : `"${title}" added to Podcasts.`);
+  selectedPodFileName = null;
+}
+
+/* ---------- Readers ---------- */
+function renderGrantBookChecks() {
+  document.getElementById('grantBookChecks').innerHTML = BOOKS.map(b => `
+    <label class="access-check-item">
+      <input type="checkbox" value="${b.id}"> ${b.title}
+    </label>
+  `).join('');
+}
+
+function renderGrantPodChecks() {
+  document.getElementById('grantPodChecks').innerHTML = PODCASTS.map(p => `
+    <label class="access-check-item">
+      <input type="checkbox" value="${p.id}"> 🎙️ ${p.title}
+    </label>
+  `).join('');
+}
+
+function renderReadersTable() {
+  document.getElementById('readersTableBody').innerHTML = READERS.map((r, idx) => `
+    <tr>
+      <td>${r.email}</td>
+      <td>
+        ${r.owned.length
+          ? r.owned.map(bid => {
+              const b = BOOKS.find(x => x.id === bid);
+              return b ? `<span class="badge-owned" style="margin-right:4px;">${b.title}</span>` : '';
+            }).join('')
+          : ''}
+        ${(r.ownedPods || []).map(pid => {
+              const p = PODCASTS.find(x => x.id === pid);
+              return p ? `<span class="badge-owned" style="margin-right:4px;">🎙️ ${p.title}</span>` : '';
+            }).join('')}
+        ${(!r.owned.length && !(r.ownedPods || []).length) ? '<span class="badge-locked">Nothing yet</span>' : ''}
+      </td>
+      <td><button class="btn btn-outline btn-tiny" onclick="removeReader(${idx})">Remove Reader</button></td>
+    </tr>
+  `).join('');
+}
+
+function removeReader(idx) {
+  const r = READERS[idx];
+  READERS.splice(idx, 1);
+  renderReadersTable();
+  renderDashboard();
+  showToast(`Removed ${r.email} from readers.`);
+}
+
+function grantAccess() {
+  const email = document.getElementById('grantEmail').value.trim();
+  const checkedBooks = Array.from(document.querySelectorAll('#grantBookChecks input:checked')).map(c => c.value);
+  const checkedPods = Array.from(document.querySelectorAll('#grantPodChecks input:checked')).map(c => c.value);
+
+  if (!email || !email.includes('@')) {
+    showToast('Please enter a valid email address.');
+    return;
+  }
+  if (checkedBooks.length === 0 && checkedPods.length === 0) {
+    showToast('Select at least one book or podcast to grant.');
+    return;
+  }
+
+  let reader = READERS.find(r => r.email === email);
+  if (!reader) {
+    reader = { email, owned: [], ownedPods: [] };
+    READERS.push(reader);
+  }
+  if (!reader.ownedPods) reader.ownedPods = [];
+
+  checkedBooks.forEach(bid => {
+    if (!reader.owned.includes(bid)) reader.owned.push(bid);
+  });
+  checkedPods.forEach(pid => {
+    if (!reader.ownedPods.includes(pid)) reader.ownedPods.push(pid);
+  });
+
+  checkedBooks.forEach(bid => {
+    const b = BOOKS.find(x => x.id === bid);
+    LOG.unshift({ time: "Just now", body: `Granted <strong>${b.title}</strong> to <strong>${email}</strong> — app link + OTP sent.` });
+  });
+  checkedPods.forEach(pid => {
+    const p = PODCASTS.find(x => x.id === pid);
+    LOG.unshift({ time: "Just now", body: `Granted podcast <strong>${p.title}</strong> to <strong>${email}</strong> — app link + OTP sent.` });
+  });
+
+  document.getElementById('grantEmail').value = '';
+  document.querySelectorAll('#grantBookChecks input:checked, #grantPodChecks input:checked').forEach(c => c.checked = false);
+
+  renderReadersTable();
+  renderDashboard();
+  renderFullLog();
+  showToast(`Access granted. App download link + OTP would now be emailed to ${email}.`);
+}
+
+/* ---------- Log ---------- */
+function renderFullLog() {
+  document.getElementById('fullLog').innerHTML = LOG.map(l =>
+    `<div class="log-entry"><div class="log-time">${l.time}</div><div class="log-body">${l.body}</div></div>`
+  ).join('') || '<p style="color:var(--text-on-ink-dim);font-size:13px;">No activity yet.</p>';
+}
+
+/* ---------- Notifications ---------- */
+let SENT_NOTIFS = [
+  { time: "Yesterday", title: "New Book: ਜ਼ਿੰਦਗੀ ਦਾ ਗੀਤ", body: "A gentle Punjabi story just arrived.", audience: "All readers" }
+];
+
+function renderNotifBookOptions() {
+  const sel = document.getElementById('notifBookLink');
+  sel.innerHTML = '<option value="">No specific book</option>' +
+    BOOKS.map(b => `<option value="${b.id}">${b.title}</option>`).join('');
+}
+
+document.getElementById('notifAudience').addEventListener('change', (e) => {
+  document.getElementById('notifSingleEmailField').style.display = e.target.value === 'one' ? 'block' : 'none';
+});
+
+function sendNotification() {
+  const title = document.getElementById('notifTitle').value.trim();
+  const msg = document.getElementById('notifMsg').value.trim();
+  const audienceVal = document.getElementById('notifAudience').value;
+  const singleEmail = document.getElementById('notifSingleEmail').value.trim();
+
+  if (!title || !msg) {
+    showToast('Please add both a title and a message.');
+    return;
+  }
+  if (audienceVal === 'one' && (!singleEmail || !singleEmail.includes('@'))) {
+    showToast('Please enter a valid reader email.');
+    return;
+  }
+
+  const audienceLabel = audienceVal === 'all' ? `All readers (${READERS.length})` : singleEmail;
+  SENT_NOTIFS.unshift({ time: "Just now", title, body: msg, audience: audienceLabel });
+  LOG.unshift({ time: "Just now", body: `Sent notification <strong>"${title}"</strong> to <strong>${audienceLabel}</strong>.` });
+
+  document.getElementById('notifTitle').value = '';
+  document.getElementById('notifMsg').value = '';
+  document.getElementById('notifSingleEmail').value = '';
+
+  renderNotifSentLog();
+  renderFullLog();
+  renderDashboard();
+  showToast(`Notification queued for ${audienceLabel}.`);
+}
+
+function renderNotifSentLog() {
+  document.getElementById('notifSentLog').innerHTML = SENT_NOTIFS.map(n => `
+    <div class="log-entry">
+      <div class="log-time">${n.time} · sent to ${n.audience}</div>
+      <div class="log-body"><strong>${n.title}</strong><br>${n.body}</div>
+    </div>
+  `).join('') || '<p style="color:var(--text-on-ink-dim);font-size:13px;">No notifications sent yet.</p>';
+}
+
+/* ---------- Book file upload (demo of EPUB/Word/PDF intake) ---------- */
+let selectedFileName = null;
+let selectedBookImageDataUrl = null;
+
+const uploadBox = document.getElementById('uploadBox');
+const bookFileInput = document.getElementById('bookFileInput');
+uploadBox.addEventListener('click', () => bookFileInput.click());
+
+const bookImageUploadBox = document.getElementById('bookImageUploadBox');
+const bookImageInput = document.getElementById('bookImageInput');
+bookImageUploadBox.addEventListener('click', () => bookImageInput.click());
+bookImageInput.addEventListener('change', () => {
+  const file = bookImageInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    selectedBookImageDataUrl = e.target.result;
+    const preview = document.getElementById('bookImagePreview');
+    preview.src = selectedBookImageDataUrl;
+    preview.style.display = 'block';
+    document.getElementById('bookImageIcon').style.display = 'none';
+    document.getElementById('bookImageUploadText').textContent = file.name;
+    bookImageUploadBox.classList.add('has-file');
+  };
+  reader.readAsDataURL(file);
+});
+
+bookFileInput.addEventListener('change', () => {
+  const file = bookFileInput.files[0];
+  const statusEl = document.getElementById('uploadStatus');
+  if (!file) return;
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  const formatNames = { epub: 'EPUB', docx: 'Word Document', pdf: 'PDF' };
+  const formatLabel = formatNames[ext] || ext.toUpperCase();
+
+  selectedFileName = file.name;
+  uploadBox.classList.add('has-file');
+  document.getElementById('uploadBoxText').textContent = file.name;
+  statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Reading file...`;
+
+  // Simulated extraction — real text-extraction happens once the backend is connected
+  setTimeout(() => {
+    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> File received. Full text extraction happens automatically once the backend is connected — for now, you can paste the opening text below if you'd like a sample.`;
+  }, 900);
+});
+
+/* ---------- Light / dark mode ---------- */
+const adminThemeToggle = document.getElementById('adminThemeToggle');
+const adminThemeMoon = document.getElementById('adminThemeMoon');
+const adminThemeSun = document.getElementById('adminThemeSun');
+adminThemeToggle.addEventListener('click', () => {
+  const isLight = document.body.classList.toggle('light-admin');
+  adminThemeMoon.style.display = isLight ? 'none' : 'block';
+  adminThemeSun.style.display = isLight ? 'block' : 'none';
+});
+
+/* ---------- App Languages (interface language provisioning) ---------- */
+let SUPPORTED_UI_LANGS = ['English', 'Hindi', 'Punjabi'];
+let REQUESTED_UI_LANGS = [];
+
+function renderUiLangTable() {
+  document.getElementById('uiLangTableBody').innerHTML = SUPPORTED_UI_LANGS.map(l => `
+    <tr>
+      <td>${l}</td>
+      <td><span class="badge-owned">Live in app &amp; website</span></td>
+    </tr>
+  `).join('');
+}
+
+function renderUiLangRequested() {
+  const el = document.getElementById('uiLangRequestedList');
+  el.innerHTML = REQUESTED_UI_LANGS.length
+    ? REQUESTED_UI_LANGS.map(l => `
+        <div class="log-entry">
+          <div class="log-body"><strong>${l}</strong> — queued, awaiting translation</div>
+        </div>
+      `).join('')
+    : '<p style="color:var(--text-on-ink-dim);font-size:13px;">No languages requested yet.</p>';
+}
+
+function addUiLanguage() {
+  const name = document.getElementById('newUiLangName').value.trim();
+  if (!name) {
+    showToast('Please type a language name.');
+    return;
+  }
+  if (SUPPORTED_UI_LANGS.includes(name) || REQUESTED_UI_LANGS.includes(name)) {
+    showToast(`${name} is already supported or requested.`);
+    return;
+  }
+  REQUESTED_UI_LANGS.push(name);
+  document.getElementById('newUiLangName').value = '';
+  renderUiLangRequested();
+  showToast(`${name} added to the request list.`);
+}
+
+/* ---------- Init ---------- */
+renderColorSwatches();
+renderBooksTable();
+renderGrantBookChecks();
+renderPodColorSwatches();
+renderPodcastsTable();
+renderGrantPodChecks();
+renderReadersTable();
+renderFullLog();
+renderDashboard();
+renderNotifBookOptions();
+renderNotifSentLog();
+renderUiLangTable();
+renderUiLangRequested();
+</script>
+</body>
+</html>
