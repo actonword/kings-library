@@ -278,6 +278,20 @@
     text-align: center; padding: 30px 24px; border-top: 1px solid rgba(233,226,208,0.06);
     font-size: 12px; color: var(--text-on-ink-dim);
   }
+  .footer-links { margin-top: 10px; display: flex; gap: 16px; justify-content: center; }
+  .footer-links button {
+    background: none; border: none; cursor: pointer; padding: 0;
+    font-size: 11.5px; color: var(--text-on-ink-dim); text-decoration: underline;
+  }
+  .footer-links button:hover { color: var(--gold-bright); }
+  #termsSection, #privacySection { max-width: 700px; margin: 0 auto; padding: 70px 24px 100px; }
+  #termsSection h2, #privacySection h2 { font-family: var(--serif); font-size: 26px; font-weight: 600; margin-bottom: 18px; }
+  #termsSection p, #privacySection p { font-size: 14px; color: var(--text-on-ink-dim); line-height: 1.8; margin-bottom: 14px; }
+  .legal-back-link {
+    display: inline-flex; align-items: center; gap: 6px; background: none; border: none; cursor: pointer;
+    color: var(--text-on-ink-dim); font-family: var(--sans); font-size: 13px; margin-bottom: 24px;
+  }
+  .legal-back-link:hover { color: var(--gold-bright); }
 
   .toast {
     position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
@@ -408,7 +422,33 @@
     </div>
   </section>
 
-  <footer id="siteFooter">© King's Library. All books remain the property of their respective authors.</footer>
+  <!-- TERMS & CONDITIONS -->
+  <section id="termsSection">
+    <button class="legal-back-link" onclick="showSection('home')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      Back
+    </button>
+    <h2>Terms &amp; Conditions</h2>
+    <div id="termsParagraphs"></div>
+  </section>
+
+  <!-- PRIVACY POLICY -->
+  <section id="privacySection">
+    <button class="legal-back-link" onclick="showSection('home')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      Back
+    </button>
+    <h2>Privacy Policy</h2>
+    <div id="privacyParagraphs"></div>
+  </section>
+
+  <footer>
+    <span id="siteFooter">© King's Library. All books remain the property of their respective authors.</span>
+    <div class="footer-links">
+      <button onclick="showSection('terms')">Terms &amp; Conditions</button>
+      <button onclick="showSection('privacy')">Privacy Policy</button>
+    </div>
+  </footer>
 
 <div class="toast" id="toast"></div>
 
@@ -449,6 +489,14 @@ function applySiteCustomizations() {
   if (SITE_SETTINGS.about_text) {
     const paras = SITE_SETTINGS.about_text.split(/\n\s*\n/).filter(Boolean);
     document.getElementById('aboutParagraphs').innerHTML = paras.map(p => `<p>${p}</p>`).join('');
+  }
+  if (SITE_SETTINGS.terms_text) {
+    const paras = SITE_SETTINGS.terms_text.split(/\n\s*\n/).filter(Boolean);
+    document.getElementById('termsParagraphs').innerHTML = paras.map(p => `<p>${p}</p>`).join('');
+  }
+  if (SITE_SETTINGS.privacy_text) {
+    const paras = SITE_SETTINGS.privacy_text.split(/\n\s*\n/).filter(Boolean);
+    document.getElementById('privacyParagraphs').innerHTML = paras.map(p => `<p>${p}</p>`).join('');
   }
 }
 

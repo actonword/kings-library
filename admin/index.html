@@ -494,6 +494,15 @@
       </div>
 
       <div class="panel-block">
+        <h3>Legal Pages</h3>
+        <p style="font-size:11.5px;color:var(--text-on-ink-dim);margin-bottom:14px;">Shown at the bottom of every page via "Terms &amp; Conditions" / "Privacy Policy" links. Leave a blank line between paragraphs. These were seeded with a starting draft — have it reviewed before you rely on it.</p>
+        <div class="form-grid">
+          <div class="form-field full"><label>Terms &amp; Conditions</label><textarea id="settingsTermsText" style="min-height:160px;"></textarea></div>
+          <div class="form-field full"><label>Privacy Policy</label><textarea id="settingsPrivacyText" style="min-height:160px;"></textarea></div>
+        </div>
+      </div>
+
+      <div class="panel-block">
         <h3>Branding</h3>
         <div class="form-grid">
           <div class="form-field full">
@@ -662,6 +671,8 @@ function renderSettings() {
   document.getElementById('settingsHeroSubtext').value = SETTINGS.hero_subtext || '';
   document.getElementById('settingsAboutText').value = SETTINGS.about_text || '';
   document.getElementById('settingsFooterText').value = SETTINGS.footer_text || '';
+  document.getElementById('settingsTermsText').value = SETTINGS.terms_text || '';
+  document.getElementById('settingsPrivacyText').value = SETTINGS.privacy_text || '';
   document.getElementById('settingsAccentColor').value = SETTINGS.accent_color || '#F0C25E';
   if (SETTINGS.logo_url) {
     document.getElementById('settingsLogoPreview').src = SETTINGS.logo_url;
@@ -711,6 +722,8 @@ async function saveSettings() {
     { key: 'hero_subtext', value: document.getElementById('settingsHeroSubtext').value.trim() },
     { key: 'about_text', value: document.getElementById('settingsAboutText').value.trim() },
     { key: 'footer_text', value: document.getElementById('settingsFooterText').value.trim() },
+    { key: 'terms_text', value: document.getElementById('settingsTermsText').value.trim() },
+    { key: 'privacy_text', value: document.getElementById('settingsPrivacyText').value.trim() },
     { key: 'accent_color', value: document.getElementById('settingsAccentColor').value },
     { key: 'logo_url', value: logoUrl },
   ]);
