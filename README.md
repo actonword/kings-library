@@ -21,7 +21,11 @@ _original-mockups/   the original static demo files, kept for reference
   6-digit sign-in code.
 - Book chapters are typed/pasted into the admin panel as plain text — no .epub/.docx/.pdf
   parsing yet.
-- Public sign-up is disabled. Only accounts created via a grant can log in.
+- Public sign-up (`enable_signup`) is left **on** at the project level — see "Known
+  CLI landmine" below for why. This is safe: every RLS policy requires a matching row
+  in `profiles`/`access_grants`, which only the `grant-access` Edge Function (service
+  role) ever creates. A stranger who self-registers gets an authenticated session with
+  zero rows visible anywhere.
 
 ## One-time Supabase setup
 
@@ -77,6 +81,26 @@ Invoke-RestMethod -Uri "https://orddbbrlxdnynbwhcqrm.supabase.co/auth/v1/otp" -M
 A `422 email_provider_disabled` means the toggle got reset — go re-enable it before
 telling anyone sign-in is fixed.
 
+**Second landmine: `enable_signup = false` breaks OTP for everyone, not just new users.**
+GoTrue's `/auth/v1/otp` endpoint refuses *all* OTP requests when `enable_signup` is
+false — even for existing users with `shouldCreateUser: false`. There is no way to
+"disable signup but allow OTP for existing accounts" at the project-config level.
+`enable_signup` is therefore left `true` intentionally (see "v1 model" above);
+don't set it back to false, it will silently break every reader's sign-in.
+
+## Resend sandbox limitation
+
+Without a verified sending domain in Resend, `onboarding@resend.dev` can only deliver
+to the email address the Resend account itself is registered under — sending to any
+other recipient fails with a GoTrue `500 Error sending magic link email`. Until a
+domain is verified:
+- Only the Resend account's own email can receive real OTP/notification mail for testing.
+- Grant access to that address specifically when testing end-to-end delivery.
+- Once a domain is verified, update `admin_email` in `supabase/config.toml`'s
+  `[auth.email.smtp]` block and the `RESEND_FROM_EMAIL` Edge Function secret to an
+  address on that domain, then re-run `supabase secrets set` (Edge Functions) and
+  push the SMTP sender change **via the dashboard**, not `config push` (see landmine above).
+
 ## Hosting
 
 GitHub repo: `actonword/kings-library` → GitHub Pages at
@@ -85,12 +109,14 @@ the three front ends.
 
 ## Status
 
-- [x] Schema + RLS policies drafted (`supabase/migrations/0001_init.sql`)
-- [x] Migration run on the live Supabase project
-- [x] Edge Functions written: `grant-access`, `send-notification`, `get-podcast-audio-url`
-- [ ] Resend SMTP + OTP template pushed via `supabase config push` (your turn — see steps above)
-- [ ] Admin account created
-- [ ] Edge Functions deployed (`supabase functions deploy`) + `RESEND_API_KEY` secret set
-- [ ] Front ends wired to Supabase (replace in-memory arrays with real queries)
-- [ ] GitHub repo created and pushed
-- [ ] GitHub Pages enabled
+- [x] Schema + RLS policies (`supabase/migrations/0001_init.sql`), storage buckets (`0002`)
+- [x] Resend SMTP + OTP template + rate limits live on the project
+- [x] Admin account created (`actonword@gmail.com`, `role='admin'`)
+- [x] Edge Functions deployed + `RESEND_API_KEY` secret set
+- [x] Admin panel (`admin/index.html`) wired to real Supabase — tested, working
+- [x] Reader app (`app/index.html`) wired to real Supabase — OTP sign-in confirmed
+      working end-to-end for the Resend account's own email; other recipients blocked
+      until a domain is verified (see "Resend sandbox limitation")
+- [ ] Verify a domain in Resend so OTP/notification email reaches real reader addresses
+- [ ] `site/index.html` (public website) — not wired yet, no payment gateway in v1
+- [ ] GitHub repo created and pushed, GitHub Pages enabled

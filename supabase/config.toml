@@ -178,8 +178,12 @@ enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
-# Allow/disallow new user signups to your project.
-enable_signup = false
+# Left true intentionally: GoTrue's /otp endpoint refuses ALL OTP requests (even for
+# existing users with shouldCreateUser:false) when this is false, which broke reader
+# sign-in entirely. Security instead comes from RLS: every policy requires a matching
+# row in `profiles`/`access_grants`, which only grant-access (service role) can create,
+# so a bare self-registered auth.users row has zero access to anything. See README.
+enable_signup = true
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -223,8 +227,8 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
-enable_signup = false
+# See the note above auth.enable_signup — left true for the same reason.
+enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
