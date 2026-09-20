@@ -965,7 +965,7 @@ document.getElementById('sendOtpBtn').addEventListener('click', async () => {
   note.innerHTML = 'Sending your code…';
   const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
   if (error) {
-    note.innerHTML = "We couldn't find that email. Access is only granted after a purchase — contact King's Library if you think this is a mistake.";
+    note.innerHTML = `Couldn't send a code: ${error.message}. If you're sure this email was granted access, contact King's Library.`;
     return;
   }
   pendingLoginEmail = email;
