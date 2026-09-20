@@ -479,8 +479,37 @@
           <div class="form-field full"><label>Contact email</label><input type="email" id="settingsContactEmail" placeholder="you@example.com"></div>
           <div class="form-field full"><label>Contact phone (optional, not shown on the site yet)</label><input type="text" id="settingsContactPhone" placeholder="+91 90000 00000"></div>
         </div>
-        <button class="btn btn-gold" onclick="saveSettings()">Save Settings</button>
       </div>
+
+      <div class="panel-block">
+        <h3>Website Content</h3>
+        <p style="font-size:11.5px;color:var(--text-on-ink-dim);margin-bottom:14px;">Note: custom text here replaces the pre-written English/Hindi/Punjabi copy on <strong>every</strong> language — it won't be auto-translated.</p>
+        <div class="form-grid">
+          <div class="form-field full"><label>Hero eyebrow (small line above the headline)</label><input type="text" id="settingsHeroEyebrow"></div>
+          <div class="form-field full"><label>Hero headline</label><input type="text" id="settingsHeroHeadline"></div>
+          <div class="form-field full"><label>Hero subtext</label><textarea id="settingsHeroSubtext"></textarea></div>
+          <div class="form-field full"><label>About page (leave a blank line between paragraphs)</label><textarea id="settingsAboutText" style="min-height:130px;"></textarea></div>
+          <div class="form-field full"><label>Footer text</label><input type="text" id="settingsFooterText"></div>
+        </div>
+      </div>
+
+      <div class="panel-block">
+        <h3>Branding</h3>
+        <div class="form-grid">
+          <div class="form-field full">
+            <label>Logo (used in the site's nav bar and homepage — leave empty to keep the default)</label>
+            <div class="upload-box" id="settingsLogoUploadBox">
+              <input type="file" id="settingsLogoInput" accept="image/*" style="display:none;">
+              <img id="settingsLogoPreview" style="display:none; width:44px; height:44px; border-radius:6px; object-fit:cover;">
+              <svg id="settingsLogoIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              <span id="settingsLogoUploadText">Click to choose a logo image — JPG or PNG</span>
+            </div>
+          </div>
+          <div class="form-field"><label>Accent color</label><input type="color" id="settingsAccentColor" style="height:38px; padding:2px;"></div>
+        </div>
+      </div>
+
+      <button class="btn btn-gold" onclick="saveSettings()">Save Settings</button>
     </div>
 
   </div>
@@ -628,7 +657,36 @@ async function loadSettings() {
 function renderSettings() {
   document.getElementById('settingsContactEmail').value = SETTINGS.contact_email || '';
   document.getElementById('settingsContactPhone').value = SETTINGS.contact_phone || '';
+  document.getElementById('settingsHeroEyebrow').value = SETTINGS.hero_eyebrow || '';
+  document.getElementById('settingsHeroHeadline').value = SETTINGS.hero_headline || '';
+  document.getElementById('settingsHeroSubtext').value = SETTINGS.hero_subtext || '';
+  document.getElementById('settingsAboutText').value = SETTINGS.about_text || '';
+  document.getElementById('settingsFooterText').value = SETTINGS.footer_text || '';
+  document.getElementById('settingsAccentColor').value = SETTINGS.accent_color || '#F0C25E';
+  if (SETTINGS.logo_url) {
+    document.getElementById('settingsLogoPreview').src = SETTINGS.logo_url;
+    document.getElementById('settingsLogoPreview').style.display = 'block';
+    document.getElementById('settingsLogoIcon').style.display = 'none';
+    document.getElementById('settingsLogoUploadText').textContent = 'Custom logo set — click to replace';
+  }
 }
+
+const settingsLogoUploadBox = document.getElementById('settingsLogoUploadBox');
+const settingsLogoInput = document.getElementById('settingsLogoInput');
+settingsLogoUploadBox.addEventListener('click', () => settingsLogoInput.click());
+settingsLogoInput.addEventListener('change', () => {
+  const file = settingsLogoInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const preview = document.getElementById('settingsLogoPreview');
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+    document.getElementById('settingsLogoIcon').style.display = 'none';
+    document.getElementById('settingsLogoUploadText').textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+});
 
 async function saveSettings() {
   const email = document.getElementById('settingsContactEmail').value.trim();
@@ -637,12 +695,29 @@ async function saveSettings() {
     showToast('Please enter a valid contact email.');
     return;
   }
+
+  let logoUrl = SETTINGS.logo_url || '';
+  const logoFile = settingsLogoInput.files[0];
+  if (logoFile) {
+    try { logoUrl = await uploadCoverImage('site-logo', logoFile); }
+    catch (e) { showToast('Logo upload failed: ' + e.message); return; }
+  }
+
   const { error } = await sb.from('settings').upsert([
     { key: 'contact_email', value: email },
     { key: 'contact_phone', value: phone },
+    { key: 'hero_eyebrow', value: document.getElementById('settingsHeroEyebrow').value.trim() },
+    { key: 'hero_headline', value: document.getElementById('settingsHeroHeadline').value.trim() },
+    { key: 'hero_subtext', value: document.getElementById('settingsHeroSubtext').value.trim() },
+    { key: 'about_text', value: document.getElementById('settingsAboutText').value.trim() },
+    { key: 'footer_text', value: document.getElementById('settingsFooterText').value.trim() },
+    { key: 'accent_color', value: document.getElementById('settingsAccentColor').value },
+    { key: 'logo_url', value: logoUrl },
   ]);
   if (error) { showToast('Could not save settings: ' + error.message); return; }
+  settingsLogoInput.value = '';
   await loadSettings();
+  renderSettings();
   showToast('Settings saved — the website will use these right away.');
 }
 
