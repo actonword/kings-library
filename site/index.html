@@ -105,19 +105,35 @@
     .feature-strip { padding: 6px 16px 60px; gap: 14px; }
     .lang-strip { padding: 0 16px 60px; }
 
-    #browseSection { padding: 34px 16px 60px; }
-    .browse-head h2 { font-size: 22px; }
+    #browseSection { padding: 18px 12px 40px; }
+    .browse-head { margin-bottom: 14px; gap: 10px; }
+    .browse-head h2 { font-size: 18px; }
+    .browse-head p { font-size: 11.5px; margin-top: 3px; }
     .browse-controls { width: 100%; flex-direction: column; }
     .browse-controls select, .browse-controls input { width: 100%; }
-    .book-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .book-title-on-cover { font-size: 12.5px; }
-    .book-name { font-size: 12px; }
-    .book-author, .book-desc { font-size: 10.5px; }
+    .book-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .book-card { gap: 5px; }
+    .book-cover { padding: 6px 5px; }
+    .book-title-on-cover { font-size: 9.5px; line-height: 1.15; }
+    .book-meta { font-size: 9.5px; }
+    .book-name { font-size: 9.5px; }
+    .book-author { font-size: 8.5px; margin-bottom: 3px; }
+    .book-desc, .share-book-btn { display: none; }
+    .book-row-tags { margin-bottom: 4px; }
+    .book-lang-tag { font-size: 7.5px; padding: 0px 5px; }
+    .book-price { font-size: 9.5px; }
+    .book-card-actions { gap: 3px; }
+    .sample-btn, .buy-btn { padding: 4px; font-size: 9px; }
 
-    #podcastsSection { padding: 34px 16px 60px; }
-    .podcast-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .podcast-name2 { font-size: 12px; }
-    .podcast-host2, .podcast-desc2 { font-size: 10.5px; }
+    #podcastsSection { padding: 18px 12px 40px; }
+    .podcast-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .podcast-card2 { padding: 8px; gap: 4px; }
+    .podcast-cover2::after { font-size: 18px; }
+    .podcast-name2 { font-size: 9.5px; }
+    .podcast-host2, .podcast-desc2 { font-size: 8.5px; }
+    .podcast-desc2 { display: none; }
+    .podcast-row2 { font-size: 8.5px; }
+    .listen-btn, .buy-btn2 { padding: 4px; font-size: 9px; }
 
     .reader-topbar { padding: 12px 16px; }
     .reader-stage { padding: 30px 18px 60px; margin-top: 18px; }

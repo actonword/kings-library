@@ -683,13 +683,25 @@
 
     .notif-panel { width: min(280px, 88vw); right: -8px; }
 
-    .library { padding: 22px 14px 50px; }
-    .library-heading { font-size: 21px; }
-    .shelf { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .book-title-on-cover { font-size: 12.5px; }
-    .book-meta { font-size: 11px; }
-    .podcast-meta-name { font-size: 12px; }
-    .podcast-meta-host, .podcast-duration { font-size: 10.5px; }
+    .library { padding: 16px 12px 40px; }
+    .library-heading { font-size: 18px; margin-bottom: 2px; }
+    .library-sub { font-size: 11px; margin-bottom: 14px; }
+    .lib-tabs { gap: 6px; margin-bottom: 14px; }
+    .lib-tab { padding: 6px 12px; font-size: 11.5px; }
+    .shelf-row { margin-bottom: 18px; }
+    .shelf-label { font-size: 10.5px; margin-bottom: 8px; }
+    .shelf { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .book-card { gap: 5px; }
+    .book-cover { padding: 6px 5px; }
+    .book-title-on-cover { font-size: 9.5px; line-height: 1.15; }
+    .book-progress-bar { margin-top: 3px; }
+    .book-meta { font-size: 9.5px; }
+    .book-author { font-size: 8.5px; }
+    .book-lang-tag { font-size: 8px; padding: 0px 5px; margin-top: 2px; }
+    .podcast-card { gap: 5px; }
+    .podcast-cover::after { font-size: 18px; }
+    .podcast-meta-name { font-size: 9.5px; }
+    .podcast-meta-host, .podcast-duration { font-size: 8.5px; }
 
     .reader-topbar { padding: 0 12px; }
     .reader-title-mini { font-size: 12.5px; max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -707,7 +719,7 @@
   }
 
   @media (max-width: 380px) {
-    .shelf { gap: 10px; }
+    .shelf { gap: 6px; }
     .brand { font-size: 14px; }
   }
 </style>
