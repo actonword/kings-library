@@ -334,6 +334,7 @@
           <div class="form-field"><label>Host</label><input type="text" id="newPodHost" placeholder="Host name"></div>
           <div class="form-field"><label>Language</label><input type="text" id="newPodLang" placeholder="e.g. English, Hindi, Punjabi"></div>
           <div class="form-field"><label>Price (₹)</label><input type="number" id="newPodPrice" placeholder="Decide later — leave blank"></div>
+          <div class="form-field full"><label>Description</label><textarea id="newPodDescription" placeholder="A short description of this episode..."></textarea></div>
           <div class="form-field full">
             <label>Cover Color (used if no image is uploaded)</label>
             <div class="color-swatches" id="podColorSwatches"></div>
@@ -867,6 +868,7 @@ async function addPodcast() {
   const host = document.getElementById('newPodHost').value.trim();
   const lang = document.getElementById('newPodLang').value.trim();
   const priceVal = document.getElementById('newPodPrice').value;
+  const description = document.getElementById('newPodDescription').value.trim();
 
   if (!title || !host || !lang) {
     showToast('Please fill in at least Title, Host, and Language.');
@@ -891,6 +893,7 @@ async function addPodcast() {
   const { error } = await sb.from('podcasts').insert({
     id, title, host, lang,
     price: priceVal === '' ? null : Number(priceVal),
+    description: description || null,
     cover_color: selectedPodColor,
     cover_image_url: coverImageUrl,
     audio_path: audioPath,
@@ -902,6 +905,7 @@ async function addPodcast() {
   document.getElementById('newPodHost').value = '';
   document.getElementById('newPodLang').value = '';
   document.getElementById('newPodPrice').value = '';
+  document.getElementById('newPodDescription').value = '';
   podFileInput.value = '';
   podUploadBox.classList.remove('has-file');
   document.getElementById('podUploadBoxText').textContent = 'Click to choose an audio file — .mp3, .wav, or .m4a';

@@ -190,6 +190,7 @@
   .podcast-cover2::after { content: '🎙️'; font-size: 26px; }
   .podcast-name2 { font-weight: 500; font-size: 13px; }
   .podcast-host2 { color: var(--text-on-ink-dim); font-size: 11.5px; margin-bottom: 4px; }
+  .podcast-desc2 { color: var(--text-on-ink-dim); font-size: 11.5px; line-height: 1.5; margin-bottom: 8px; }
   .podcast-row2 { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--text-on-ink-dim); }
   .podcast-price2 { color: var(--gold-bright); font-weight: 700; font-family: var(--serif); }
   .listen-btn { width: 100%; background: none; border: 1px solid rgba(233,226,208,0.18); color: var(--text-on-ink); padding: 7px; border-radius: var(--radius); font-size: 12px; cursor: pointer; font-family: var(--sans); }
@@ -446,6 +447,7 @@ async function loadPodcasts() {
     host: p.host,
     lang: p.lang,
     price: p.price,
+    description: p.description,
     coverColor: p.cover_color,
     coverImage: p.cover_image_url,
     duration: p.duration_sec || 0,
@@ -672,6 +674,7 @@ function podcastCardHTML2(pod) {
       <div class="podcast-cover2" style="${coverStyle}"></div>
       <div class="podcast-name2">${pod.title}</div>
       <div class="podcast-host2">${pod.host}</div>
+      ${pod.description ? `<div class="podcast-desc2">${pod.description}</div>` : ''}
       <div class="podcast-row2"><span>${formatDur(pod.duration)} · ${pod.lang}</span><span class="podcast-price2">${pod.price ? '₹' + pod.price : 'Free'}</span></div>
       <button class="listen-btn" data-id="${pod.id}">${tr('listenToSample')}</button>
       <button class="buy-btn2" data-id="${pod.id}">${tr('buyNow')}</button>

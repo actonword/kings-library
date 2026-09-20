@@ -366,6 +366,7 @@
   }
   .podcast-title { font-family: var(--serif); font-size: 19px; font-weight: 600; text-align: center; margin-bottom: 4px; max-width: 320px; }
   .podcast-host { font-size: 13px; color: var(--text-on-ink-dim); margin-bottom: 30px; }
+  .podcast-desc { font-size: 12.5px; color: var(--text-on-ink-dim); line-height: 1.6; max-width: 340px; text-align: center; margin-top: -20px; margin-bottom: 24px; }
 
   .podcast-scrubber { width: min(360px, 80vw); margin-bottom: 30px; }
   .podcast-scrubber-track { height: 4px; background: rgba(233,226,208,0.15); border-radius: 4px; cursor: pointer; overflow: hidden; }
@@ -873,6 +874,7 @@
       <div class="podcast-art" id="podcastArt"></div>
       <div class="podcast-title" id="podcastTitleEl"></div>
       <div class="podcast-host" id="podcastHostEl"></div>
+      <div class="podcast-desc" id="podcastDescEl" style="display:none;"></div>
 
       <div class="podcast-scrubber">
         <div class="podcast-scrubber-track" id="podcastScrubTrack">
@@ -1034,6 +1036,7 @@ async function loadPodcasts() {
     title: p.title,
     host: p.host,
     lang: p.lang,
+    description: p.description,
     coverColor: p.cover_color,
     coverImage: p.cover_image_url,
     duration: p.duration_sec || 0,
@@ -1447,6 +1450,9 @@ async function openPodcast(id) {
   document.getElementById('podcastArt').style.background = currentPodcast.coverColor;
   document.getElementById('podcastTitleEl').textContent = currentPodcast.title;
   document.getElementById('podcastHostEl').textContent = currentPodcast.host;
+  const descEl = document.getElementById('podcastDescEl');
+  descEl.textContent = currentPodcast.description || '';
+  descEl.style.display = currentPodcast.description ? 'block' : 'none';
   document.getElementById('podcastTimeTotal').textContent = '--:--';
 
   podcastAudioEl.pause();
