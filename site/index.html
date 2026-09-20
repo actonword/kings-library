@@ -470,9 +470,9 @@
   <section id="termsSection">
     <button class="legal-back-link" onclick="showSection('home')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
-      Back
+      <span id="termsBackLabel">Back</span>
     </button>
-    <h2>Terms &amp; Conditions</h2>
+    <h2 id="termsH2">Terms &amp; Conditions</h2>
     <div id="termsParagraphs"></div>
   </section>
 
@@ -480,17 +480,17 @@
   <section id="privacySection">
     <button class="legal-back-link" onclick="showSection('home')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
-      Back
+      <span id="privacyBackLabel">Back</span>
     </button>
-    <h2>Privacy Policy</h2>
+    <h2 id="privacyH2">Privacy Policy</h2>
     <div id="privacyParagraphs"></div>
   </section>
 
   <footer>
     <span id="siteFooter">© King's Library. All books remain the property of their respective authors.</span>
     <div class="footer-links">
-      <button onclick="showSection('terms')">Terms &amp; Conditions</button>
-      <button onclick="showSection('privacy')">Privacy Policy</button>
+      <button id="footerTermsBtn" onclick="showSection('terms')">Terms &amp; Conditions</button>
+      <button id="footerPrivacyBtn" onclick="showSection('privacy')">Privacy Policy</button>
     </div>
   </footer>
 
@@ -973,7 +973,10 @@ const UI_STRINGS = {
     listenToSample: "Listen to Sample",
     noPodcastsFound: "No podcasts found.",
     freePreviewEnded: "Free preview ended — Buy Now to hear the full episode.",
-    share: "Share"
+    share: "Share",
+    legalBack: "Back",
+    termsLabel: "Terms & Conditions",
+    privacyLabel: "Privacy Policy"
   },
   hi: {
     code: "हिं",
@@ -1013,7 +1016,10 @@ const UI_STRINGS = {
     listenToSample: "नमूना सुनें",
     noPodcastsFound: "कोई पॉडकास्ट नहीं मिला।",
     freePreviewEnded: "मुफ़्त पूर्वावलोकन समाप्त हुआ — पूरा एपिसोड सुनने के लिए अभी खरीदें।",
-    share: "साझा करें"
+    share: "साझा करें",
+    legalBack: "वापस",
+    termsLabel: "नियम और शर्तें",
+    privacyLabel: "गोपनीयता नीति"
   },
   pa: {
     code: "ਪੰ",
@@ -1053,7 +1059,10 @@ const UI_STRINGS = {
     listenToSample: "ਨਮੂਨਾ ਸੁਣੋ",
     noPodcastsFound: "ਕੋਈ ਪੌਡਕਾਸਟ ਨਹੀਂ ਮਿਲਿਆ।",
     freePreviewEnded: "ਮੁਫ਼ਤ ਝਲਕ ਖਤਮ ਹੋਈ — ਪੂਰਾ ਐਪੀਸੋਡ ਸੁਣਨ ਲਈ ਹੁਣੇ ਖਰੀਦੋ।",
-    share: "ਸਾਂਝਾ ਕਰੋ"
+    share: "ਸਾਂਝਾ ਕਰੋ",
+    legalBack: "ਵਾਪਸ",
+    termsLabel: "ਨਿਯਮ ਅਤੇ ਸ਼ਰਤਾਂ",
+    privacyLabel: "ਪਰਦੇਦਾਰੀ ਨੀਤੀ"
   }
 };
 
@@ -1109,6 +1118,13 @@ function applyTranslations() {
   setHTML('feat3Title', s.feat3Title);
   setText('feat3Text', s.feat3Text);
   setText('availableInLabel', s.availableInLabel);
+
+  setText('termsBackLabel', s.legalBack);
+  setText('privacyBackLabel', s.legalBack);
+  setText('termsH2', s.termsLabel);
+  setText('privacyH2', s.privacyLabel);
+  setText('footerTermsBtn', s.termsLabel);
+  setText('footerPrivacyBtn', s.privacyLabel);
 
   renderGrid();
   renderPodcastGrid();
