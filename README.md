@@ -118,6 +118,7 @@ the three front ends.
       working end-to-end (grant → email → OTP → library → open/read a book) for the
       Resend account's own email; other recipients blocked until a domain is verified
       (see "Resend sandbox limitation")
+- [x] Public website (`site/index.html`) wired to real Supabase catalog — Buy Now
+      opens a pre-filled email to malviyadheerajkumar@gmail.com (no payment gateway in v1)
 - [ ] Verify a domain in Resend so OTP/notification email reaches real reader addresses
-- [ ] `site/index.html` (public website) — not wired yet, no payment gateway in v1
 - [ ] GitHub repo created and pushed, GitHub Pages enabled
