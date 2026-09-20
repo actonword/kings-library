@@ -3,3 +3,6 @@ node_modules/
 .env.local
 .DS_Store
 Thumbs.db
+
+_server.log
+_server.err
