@@ -409,7 +409,14 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const CONTACT_EMAIL = 'malviyadheerajkumar@gmail.com';
+let CONTACT_EMAIL = ''; // loaded from the settings table admins edit in the admin panel
+
+async function loadSettings() {
+  const { data, error } = await sb.from('settings').select('*');
+  if (error) { console.error(error); return; }
+  const settings = Object.fromEntries((data || []).map(s => [s.key, s.value]));
+  CONTACT_EMAIL = settings.contact_email || '';
+}
 
 /* ---------- Supabase-backed catalog ---------- */
 let BOOKS = [];
@@ -560,6 +567,10 @@ function buyBook(id) {
 }
 
 function requestPurchase(title, price) {
+  if (!CONTACT_EMAIL) {
+    showToast("Purchasing isn't set up yet — check back soon.");
+    return;
+  }
   const priceLabel = price ? `₹${price}` : tr('priceTBA');
   const subject = encodeURIComponent(`King's Library — purchase request: ${title}`);
   const body = encodeURIComponent(`Hi,\n\nI'd like to buy "${title}" (${priceLabel}) from King's Library.\n\nMy email for access: \n`);
@@ -972,6 +983,7 @@ document.getElementById('uiLangBtnSite').addEventListener('click', cycleUiLang);
 
 /* ---------- Init ---------- */
 async function init() {
+  await loadSettings();
   await loadBooks();
   await loadPodcasts();
   renderLangPills();

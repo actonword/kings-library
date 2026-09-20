@@ -249,6 +249,10 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>
       App Languages
     </button>
+    <button class="nav-item" data-view="settings" onclick="showView('settings')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.2 4.2l4.2 4.2m7.2 7.2 4.2 4.2M1 12h6m10 0h6M4.2 19.8l4.2-4.2m7.2-7.2 4.2-4.2"/></svg>
+      Settings
+    </button>
     <button class="nav-item" id="adminSignOutBtn" style="margin-top:auto;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
       Sign Out
@@ -463,6 +467,20 @@
       </div>
     </div>
 
+    <!-- SETTINGS -->
+    <div id="settingsView" class="view">
+      <div class="page-head"><h1>Settings</h1><p>Shown publicly on the website — e.g. where "Buy Now" tells a visitor to reach you.</p></div>
+
+      <div class="panel-block">
+        <h3>Contact Details</h3>
+        <div class="form-grid">
+          <div class="form-field full"><label>Contact email</label><input type="email" id="settingsContactEmail" placeholder="you@example.com"></div>
+          <div class="form-field full"><label>Contact phone (optional, not shown on the site yet)</label><input type="text" id="settingsContactPhone" placeholder="+91 90000 00000"></div>
+        </div>
+        <button class="btn btn-gold" onclick="saveSettings()">Save Settings</button>
+      </div>
+    </div>
+
   </div>
   </div>
 
@@ -597,6 +615,35 @@ async function loadUiLanguages() {
   REQUESTED_UI_LANGS = (reqs || []).map(r => r.language_name);
 }
 
+let SETTINGS = {};
+
+async function loadSettings() {
+  const { data, error } = await sb.from('settings').select('*');
+  if (error) { showToast('Could not load settings: ' + error.message); return; }
+  SETTINGS = Object.fromEntries((data || []).map(s => [s.key, s.value]));
+}
+
+function renderSettings() {
+  document.getElementById('settingsContactEmail').value = SETTINGS.contact_email || '';
+  document.getElementById('settingsContactPhone').value = SETTINGS.contact_phone || '';
+}
+
+async function saveSettings() {
+  const email = document.getElementById('settingsContactEmail').value.trim();
+  const phone = document.getElementById('settingsContactPhone').value.trim();
+  if (!email || !email.includes('@')) {
+    showToast('Please enter a valid contact email.');
+    return;
+  }
+  const { error } = await sb.from('settings').upsert([
+    { key: 'contact_email', value: email },
+    { key: 'contact_phone', value: phone },
+  ]);
+  if (error) { showToast('Could not save settings: ' + error.message); return; }
+  await loadSettings();
+  showToast('Settings saved — the website will use these right away.');
+}
+
 async function loadEverything() {
   await loadBooks();
   await loadPodcasts();
@@ -604,6 +651,7 @@ async function loadEverything() {
   await loadLog();
   await loadNotifications();
   await loadUiLanguages();
+  await loadSettings();
   renderColorSwatches();
   renderBooksTable();
   renderGrantBookChecks();
@@ -617,6 +665,7 @@ async function loadEverything() {
   renderNotifSentLog();
   renderUiLangTable();
   renderUiLangRequested();
+  renderSettings();
 }
 
 /* ---------- Dashboard ---------- */
