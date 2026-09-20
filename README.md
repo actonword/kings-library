@@ -57,6 +57,26 @@ _original-mockups/   the original static demo files, kept for reference
    `anon` public key. These go in each front end's Supabase client config (added in
    the next step, once the front ends are wired up).
 
+## Known CLI landmine
+
+`supabase config push` for anything under `[auth]`/`[auth.email]` silently resets the
+dashboard's "Enable Email provider" toggle to OFF (it's not a field the CLI's config
+schema tracks, so it seems to get clobbered as a side effect). This breaks all email
+sign-in — password and OTP alike — with zero emails sent and a `email_provider_disabled`
+error. Hit this twice already.
+
+**Rule: don't `config push` the auth section anymore.** Make auth/email setting changes
+directly in the dashboard, then `supabase config pull` afterward just to keep
+`config.toml` in sync for reference. If a push to auth ever is unavoidable, immediately
+verify afterward with:
+```powershell
+Invoke-RestMethod -Uri "https://orddbbrlxdnynbwhcqrm.supabase.co/auth/v1/otp" -Method POST `
+  -Headers @{ "apikey" = "<anon key>"; "Content-Type" = "application/json" } `
+  -Body '{"email":"<any granted reader email>","create_user":false}'
+```
+A `422 email_provider_disabled` means the toggle got reset — go re-enable it before
+telling anyone sign-in is fixed.
+
 ## Hosting
 
 GitHub repo: `actonword/kings-library` → GitHub Pages at
