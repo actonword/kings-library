@@ -6,6 +6,8 @@
 <title>King's Library</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;0,7..72,600;0,7..72,700;1,7..72,400&family=Inter:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&family=Noto+Sans+Gurmukhi:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/supabaseClient.js"></script>
 <style>
   :root {
     --ink: #0A121C;
@@ -772,7 +774,10 @@
             <div id="notifList"></div>
           </div>
         </div>
-        <div class="reader-name"><span id="readingAsLabel">Reading as</span> <strong>Guest Reader</strong></div>
+        <div class="reader-name"><span id="readingAsLabel">Reading as</span> <strong id="readerNameStrong">Guest Reader</strong></div>
+        <button id="signOutBtn" class="theme-toggle-btn" title="Sign out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+        </button>
       </div>
     </div>
 
@@ -906,111 +911,171 @@
 </div>
 
 <script>
-/* ============ DEMO CONTENT — sample books, several languages ============ */
-const BOOKS = [
-  {
-    id: 'b1',
-    owned: true,
-    title: "The Silent Hymn",
-    author: "M. Okafor",
-    lang: "English",
-    coverColor: "#3E5A78",
-    progress: 62,
-    chapters: [
-      { label: "Chapter One", title: "The Quiet Room", paras: [
-        "The chapel was empty at that hour, save for the dust turning slow circles in the light.",
-        "Elena had come every evening that week, not to pray exactly, but to sit where the singing used to be.",
-        "She remembered her grandmother's voice filling this very room, rough and warm, carrying the last note longer than anyone thought possible.",
-        "Tonight the silence felt different. Not absence, but a held breath, waiting for something to begin again."
-      ]},
-      { label: "Chapter Two", title: "What the Choir Left Behind", paras: [
-        "There were still hymnals stacked along the back pew, their spines cracked from decades of open hands.",
-        "Elena ran her fingers along the covers until she found the one with her grandmother's initials pressed into the corner.",
-        "Inside, faint pencil marks traced where the melody should rise, where the voice should soften.",
-        "She hummed the first line under her breath, and for a moment, the room did not feel so empty at all."
-      ]}
-    ]
-  },
-  {
-    id: 'b2',
-    owned: true,
-    title: "जीवन का गीत",
-    author: "अनिता शर्मा",
-    lang: "Hindi",
-    coverColor: "#7A4A3A",
-    progress: 20,
-    devanagari: true,
-    chapters: [
-      { label: "अध्याय एक", title: "सुबह की पहली किरण", paras: [
-        "गाँव में सुबह की पहली किरण के साथ ही पक्षियों का गीत शुरू हो जाता था।",
-        "राधा हर दिन उसी पेड़ के नीचे बैठकर अपनी दादी की कहानियाँ सुनती थी।",
-        "दादी कहती थीं कि हर सुबह एक नया गीत लेकर आती है, बस सुनने वाला कान चाहिए।",
-        "राधा ने आँखें बंद कीं और हवा में तैरते सुरों को महसूस किया।"
-      ]}
-    ]
-  },
-  {
-    id: 'b3',
-    owned: true,
-    title: "ਜ਼ਿੰਦਗੀ ਦਾ ਗੀਤ",
-    author: "ਹਰਪ੍ਰੀਤ ਕੌਰ",
-    lang: "Punjabi",
-    coverColor: "#4A5D45",
-    progress: 8,
-    gurmukhi: true,
-    chapters: [
-      { label: "ਅਧਿਆਇ ਇੱਕ", title: "ਸਵੇਰ ਦੀ ਪਹਿਲੀ ਕਿਰਨ", paras: [
-        "ਪਿੰਡ ਵਿੱਚ ਸਵੇਰ ਦੀ ਪਹਿਲੀ ਕਿਰਨ ਨਾਲ ਹੀ ਪੰਛੀਆਂ ਦਾ ਗੀਤ ਸ਼ੁਰੂ ਹੋ ਜਾਂਦਾ ਸੀ।",
-        "ਸਿਮਰਨ ਹਰ ਰੋਜ਼ ਉਸੇ ਰੁੱਖ ਹੇਠਾਂ ਬੈਠ ਕੇ ਆਪਣੀ ਦਾਦੀ ਦੀਆਂ ਕਹਾਣੀਆਂ ਸੁਣਦੀ ਸੀ।",
-        "ਦਾਦੀ ਕਹਿੰਦੀ ਸੀ ਕਿ ਹਰ ਸਵੇਰ ਇੱਕ ਨਵਾਂ ਗੀਤ ਲੈ ਕੇ ਆਉਂਦੀ ਹੈ, ਬੱਸ ਸੁਣਨ ਵਾਲਾ ਕੰਨ ਚਾਹੀਦਾ ਹੈ।",
-        "ਸਿਮਰਨ ਨੇ ਅੱਖਾਂ ਬੰਦ ਕੀਤੀਆਂ ਅਤੇ ਹਵਾ ਵਿੱਚ ਤੈਰਦੇ ਸੁਰਾਂ ਨੂੰ ਮਹਿਸੂਸ ਕੀਤਾ।"
-      ]}
-    ]
-  },
-  {
-    id: 'b5',
-    owned: true,
-    title: "Letters to a Young Composer",
-    author: "R. Whitfield",
-    lang: "English",
-    coverColor: "#5C4A78",
-    progress: 88,
-    chapters: [
-      { label: "Chapter Nine", title: "On Finishing", paras: [
-        "You will want to keep changing it forever. Every composer does.",
-        "But a piece is not abandoned when you stop — it is released, the way a held note must eventually end for the next one to begin.",
-        "Trust that the silence after the last note is also part of the music.",
-        "Let it go, and start the next one."
-      ]}
-    ]
-  },
-  {
-    id: 'b12',
-    owned: false,
-    title: "The Watchmaker's Silence",
-    author: "H. Ainsworth",
-    lang: "English",
-    coverColor: "#6B5A3E",
-    progress: 45,
-    chapters: [
-      { label: "Chapter One", title: "The Last Wind-Up", paras: [
-        "The old shop smelled of oil and brass, and every clock inside told a slightly different time.",
-        "Thomas had inherited the shop, but not, it seemed, his grandfather's patience for silence.",
-        "Each evening he wound the largest clock by hand, though it had not kept correct time in years.",
-        "Some habits, he decided, were not about being right — only about not forgetting."
-      ]}
-    ]
-  }
-];
-
-const READER_NAME = "Guest Reader";
+/* ============ Supabase-backed state ============ */
+let BOOKS = [];
+let PODCASTS = [];
+let NOTIFICATIONS = [];
+let currentReader = null;
+let READER_NAME = "Guest Reader";
 const SESSION_ID = "KL-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+let pendingLoginEmail = null;
+
+function fmtRelative(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
+/* ============ Auth ============ */
+async function checkSession() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    const ok = await enterLibraryAsSignedInReader();
+    if (!ok) await sb.auth.signOut();
+  }
+}
+
+async function enterLibraryAsSignedInReader() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return false;
+  const { data: profile, error } = await sb.from('profiles').select('id,email,display_name').eq('id', session.user.id).single();
+  if (error || !profile) return false;
+  currentReader = profile;
+  READER_NAME = profile.display_name || profile.email;
+  document.getElementById('readerNameStrong').textContent = READER_NAME;
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('libraryView').style.display = 'block';
+  await loadEverything();
+  return true;
+}
+
+document.getElementById('sendOtpBtn').addEventListener('click', async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const note = document.getElementById('loginNote');
+  if (!email || !email.includes('@')) {
+    note.innerHTML = 'Please enter a valid email address.';
+    return;
+  }
+  note.innerHTML = 'Sending your code…';
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  if (error) {
+    note.innerHTML = "We couldn't find that email. Access is only granted after a purchase — contact King's Library if you think this is a mistake.";
+    return;
+  }
+  pendingLoginEmail = email;
+  document.getElementById('emailStep').style.display = 'none';
+  document.getElementById('otpStep').style.display = 'block';
+  document.getElementById('loginStepSub').textContent = `We've sent a 6-digit code to ${email}`;
+  note.innerHTML = '';
+});
+
+document.getElementById('resendOtpBtn').addEventListener('click', async () => {
+  const note = document.getElementById('loginNote');
+  if (!pendingLoginEmail) return;
+  const { error } = await sb.auth.signInWithOtp({ email: pendingLoginEmail, options: { shouldCreateUser: false } });
+  note.innerHTML = error ? error.message : 'A new code is on its way.';
+});
+
+document.getElementById('verifyOtpBtn').addEventListener('click', async () => {
+  const entered = document.getElementById('loginOtp').value.trim();
+  const note = document.getElementById('loginNote');
+  if (!pendingLoginEmail || !entered) { note.innerHTML = 'Enter the code from your email.'; return; }
+  const { error } = await sb.auth.verifyOtp({ email: pendingLoginEmail, token: entered, type: 'email' });
+  if (error) {
+    note.innerHTML = "That code doesn't match. Please try again.";
+    return;
+  }
+  await enterLibraryAsSignedInReader();
+});
+
+document.getElementById('signOutBtn').addEventListener('click', async () => {
+  await sb.auth.signOut();
+  location.reload();
+});
+
+/* ============ Loading data ============ */
+async function loadBooks() {
+  const { data: books, error } = await sb.from('books').select('*').eq('status', 'published').order('created_at');
+  if (error) { showToast('Could not load books: ' + error.message); return; }
+  const { data: grants } = await sb.from('access_grants').select('item_id').eq('reader_id', currentReader.id).eq('item_type', 'book');
+  const ownedIds = new Set((grants || []).map(g => g.item_id));
+  const { data: progressRows } = await sb.from('reading_progress').select('*').eq('reader_id', currentReader.id);
+  const progressMap = Object.fromEntries((progressRows || []).map(p => [p.book_id, p]));
+
+  BOOKS = (books || []).map(b => ({
+    id: b.id,
+    title: b.title,
+    author: b.author,
+    lang: b.lang,
+    coverColor: b.cover_color,
+    coverImage: b.cover_image_url,
+    owned: ownedIds.has(b.id),
+    progress: progressMap[b.id]?.percent || 0,
+    _resumeChapterPosition: progressMap[b.id]?.chapter_position || 0,
+    _chaptersLoaded: false,
+    chapters: [],
+  }));
+}
+
+async function loadPodcasts() {
+  const { data: pods, error } = await sb.from('podcasts').select('*').eq('status', 'published').order('created_at');
+  if (error) { showToast('Could not load podcasts: ' + error.message); return; }
+  const { data: grants } = await sb.from('access_grants').select('item_id').eq('reader_id', currentReader.id).eq('item_type', 'podcast');
+  const ownedIds = new Set((grants || []).map(g => g.item_id));
+
+  PODCASTS = (pods || []).map(p => ({
+    id: p.id,
+    title: p.title,
+    host: p.host,
+    lang: p.lang,
+    coverColor: p.cover_color,
+    coverImage: p.cover_image_url,
+    duration: p.duration_sec || 0,
+    owned: ownedIds.has(p.id),
+    hasAudio: !!p.audio_path,
+  }));
+}
+
+async function loadNotifications() {
+  const { data, error } = await sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(30);
+  if (error) { showToast('Could not load notifications: ' + error.message); return; }
+  const { data: reads } = await sb.from('notification_reads').select('notification_id').eq('reader_id', currentReader.id);
+  const readIds = new Set((reads || []).map(r => r.notification_id));
+  NOTIFICATIONS = (data || []).map(n => ({
+    id: n.id,
+    title: n.title,
+    msg: n.message,
+    bookId: n.book_id,
+    time: fmtRelative(n.created_at),
+    read: readIds.has(n.id),
+  }));
+}
+
+async function loadEverything() {
+  await loadBooks();
+  await loadPodcasts();
+  await loadNotifications();
+  populateLangDropdown();
+  renderLibrary();
+  renderPodcastShelf();
+  renderNotifications();
+  document.getElementById('bellDot').classList.toggle('show', NOTIFICATIONS.some(n => !n.read));
+}
 
 /* ============ Rendering the library shelves ============ */
 function bookCardHTML(book) {
+  const coverStyle = book.coverImage
+    ? `background-image:url('${book.coverImage}');background-size:cover;background-position:center;`
+    : `background:${book.coverColor}`;
   return `
     <div class="book-card${book.owned ? '' : ' locked'}" data-id="${book.id}">
-      <div class="book-cover" style="background:${book.coverColor}">
+      <div class="book-cover" style="${coverStyle}">
         ${book.owned ? '' : `<div class="lock-badge">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F0C25E" stroke-width="2.4"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
         </div>`}
@@ -1028,6 +1093,7 @@ function bookCardHTML(book) {
 
 function populateLangDropdown() {
   const select = document.getElementById('langSelect');
+  select.querySelectorAll('option:not(:first-child)').forEach(o => o.remove());
   const langs = [...new Set(BOOKS.map(b => b.lang))].sort();
   langs.forEach(lang => {
     const opt = document.createElement('option');
@@ -1085,9 +1151,23 @@ let currentBook = null;
 let currentChapterIdx = 0;
 let fontSize = 17;
 
-function openBook(id) {
+async function openBook(id) {
   currentBook = BOOKS.find(b => b.id === id);
-  currentChapterIdx = 0;
+  if (!currentBook._chaptersLoaded) {
+    const { data: chapters, error } = await sb.from('chapters').select('*').eq('book_id', id).order('position');
+    if (error) { showToast('Could not load this book: ' + error.message); return; }
+    currentBook.chapters = (chapters || []).map(c => ({
+      label: c.label || '',
+      title: c.title || '',
+      paras: (c.content || '').split(/\n\s*\n/).filter(Boolean),
+    }));
+    currentBook._chaptersLoaded = true;
+  }
+  if (!currentBook.chapters.length) {
+    showToast("This book doesn't have any content yet — check back soon.");
+    return;
+  }
+  currentChapterIdx = Math.min(currentBook._resumeChapterPosition || 0, currentBook.chapters.length - 1);
   document.getElementById('libraryView').style.display = 'none';
   document.getElementById('readerView').classList.add('active');
   document.getElementById('readerTitleMini').textContent = currentBook.title;
@@ -1109,6 +1189,17 @@ function buildWatermark() {
   layer.innerHTML = html;
 }
 
+async function saveReadingProgress() {
+  if (!currentReader || !currentBook) return;
+  const percent = Math.round(((currentChapterIdx + 1) / currentBook.chapters.length) * 100);
+  currentBook.progress = percent;
+  currentBook._resumeChapterPosition = currentChapterIdx;
+  await sb.from('reading_progress').upsert(
+    { reader_id: currentReader.id, book_id: currentBook.id, chapter_position: currentChapterIdx, percent },
+    { onConflict: 'reader_id,book_id' }
+  );
+}
+
 function renderPage() {
   const ch = currentBook.chapters[currentChapterIdx];
   const content = document.getElementById('pageContent');
@@ -1122,6 +1213,7 @@ function renderPage() {
   document.getElementById('pageIndicator').textContent = `Page ${currentChapterIdx + 1} of ${currentBook.chapters.length}`;
   const pct = ((currentChapterIdx + 1) / currentBook.chapters.length) * 100;
   document.getElementById('progressFill').style.width = pct + '%';
+  saveReadingProgress();
 }
 
 document.getElementById('prevZone').addEventListener('click', () => {
@@ -1130,7 +1222,7 @@ document.getElementById('prevZone').addEventListener('click', () => {
 });
 document.getElementById('nextZone').addEventListener('click', () => {
   if (currentChapterIdx < currentBook.chapters.length - 1) { currentChapterIdx++; renderPage(); }
-  else showToast("You've reached the end of this sample.");
+  else showToast("You've reached the end of this book.");
 });
 
 /* Settings panel */
@@ -1249,53 +1341,12 @@ appThemeToggle.addEventListener('click', () => {
   themeIconSun.style.display = isLight ? 'block' : 'none';
 });
 
-/* ============ Sign-in flow (demo of post-payment email + OTP access) ============ */
-let demoOtp = null;
-
-document.getElementById('sendOtpBtn').addEventListener('click', () => {
-  const email = document.getElementById('loginEmail').value.trim();
-  const note = document.getElementById('loginNote');
-  if (!email || !email.includes('@')) {
-    note.innerHTML = 'Please enter a valid email address.';
-    return;
-  }
-  // In the real app, the server checks this email against your payment
-  // records, then emails a real OTP. Here we simulate that step.
-  demoOtp = String(Math.floor(100000 + Math.random() * 900000));
-  document.getElementById('emailStep').style.display = 'none';
-  document.getElementById('otpStep').style.display = 'block';
-  document.getElementById('loginStepSub').textContent = `We've sent a 6-digit code to ${email}`;
-  note.innerHTML = `Demo mode — no real email is sent here. Your code is <strong>${demoOtp}</strong>.`;
-});
-
-document.getElementById('resendOtpBtn').addEventListener('click', () => {
-  demoOtp = String(Math.floor(100000 + Math.random() * 900000));
-  document.getElementById('loginNote').innerHTML = `New demo code: <strong>${demoOtp}</strong>`;
-});
-
-document.getElementById('verifyOtpBtn').addEventListener('click', () => {
-  const entered = document.getElementById('loginOtp').value.trim();
-  const note = document.getElementById('loginNote');
-  if (entered !== demoOtp) {
-    note.innerHTML = 'That code doesn\'t match. Please try again.';
-    return;
-  }
-  document.getElementById('loginView').style.display = 'none';
-  document.getElementById('libraryView').style.display = 'block';
-});
-
 /* ============ Notifications ============ */
-const NOTIFICATIONS = [
-  { title: "New Book: The Watchmaker's Silence", msg: "A quiet story about patience and letting go — now in your library.", time: "2 hours ago", bookId: "b12" },
-  { title: "New Book: ਜ਼ਿੰਦਗੀ ਦਾ ਗੀਤ", msg: "A gentle Punjabi story just arrived.", time: "Yesterday", bookId: "b3" },
-  { title: "Welcome to King's Library", msg: "Your reading, protected and in any language.", time: "3 days ago", bookId: null },
-];
-
 function renderNotifications() {
   const list = document.getElementById('notifList');
   list.innerHTML = NOTIFICATIONS.length
-    ? NOTIFICATIONS.map((n, i) => `
-        <div class="notif-item" data-idx="${i}">
+    ? NOTIFICATIONS.map((n) => `
+        <div class="notif-item" data-id="${n.id}" style="${n.read ? 'opacity:0.6;' : ''}">
           <div class="n-title">${n.title}</div>
           <div class="n-msg">${n.msg}</div>
           <div class="n-time">${n.time}</div>
@@ -1304,10 +1355,18 @@ function renderNotifications() {
     : '<div class="notif-empty">No notifications yet.</div>';
 
   list.querySelectorAll('.notif-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const n = NOTIFICATIONS[item.dataset.idx];
+    item.addEventListener('click', async () => {
+      const n = NOTIFICATIONS.find(x => x.id === item.dataset.id);
       document.getElementById('notifPanel').classList.remove('open');
-      if (n.bookId && BOOKS.find(b => b.id === n.bookId)) {
+      if (!n.read) {
+        await sb.from('notification_reads').upsert(
+          { notification_id: n.id, reader_id: currentReader.id },
+          { onConflict: 'notification_id,reader_id' }
+        );
+        n.read = true;
+        document.getElementById('bellDot').classList.toggle('show', NOTIFICATIONS.some(x => !x.read));
+      }
+      if (n.bookId && BOOKS.find(b => b.id === n.bookId && b.owned)) {
         openBook(n.bookId);
       } else {
         showToast(n.title);
@@ -1321,21 +1380,12 @@ const notifPanel = document.getElementById('notifPanel');
 bellBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   notifPanel.classList.toggle('open');
-  document.getElementById('bellDot').classList.remove('show');
 });
 document.addEventListener('click', (e) => {
   if (!notifPanel.contains(e.target) && e.target !== bellBtn) notifPanel.classList.remove('open');
 });
 
 /* ============ Podcasts ============ */
-const PODCASTS = [
-  { id: 'p0', title: "Demo Episode — Test the Player", host: "King's Library", lang: "English", coverColor: "#8B6F3E", duration: 0, owned: true, audioSrc: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-  { id: 'p1', title: "Hymns Behind the Story", host: "King's Library Studio", lang: "English", coverColor: "#3E5A78", duration: 1140, owned: true },
-  { id: 'p2', title: "ਸੰਗੀਤ ਦੀਆਂ ਗੱਲਾਂ", host: "ਹਰਪ੍ਰੀਤ ਕੌਰ", lang: "Punjabi", coverColor: "#4A5D45", duration: 900, owned: true },
-  { id: 'p3', title: "लेखक से बातचीत", host: "अनिता शर्मा", lang: "Hindi", coverColor: "#7A4A3A", duration: 1320, owned: false },
-  { id: 'p4', title: "Writing in Silence", host: "H. Ainsworth", lang: "English", coverColor: "#6B5A3E", duration: 1020, owned: false },
-];
-
 function switchLibTab(tab) {
   const isBooks = tab === 'books';
   document.getElementById('tabBooks').classList.toggle('active', isBooks);
@@ -1351,16 +1401,19 @@ function formatTime(sec) {
 }
 
 function podcastCardHTML(pod) {
+  const coverStyle = pod.coverImage
+    ? `background-image:url('${pod.coverImage}');background-size:cover;background-position:center;`
+    : `background:${pod.coverColor}`;
   return `
     <div class="podcast-card${pod.owned ? '' : ' locked'}" data-id="${pod.id}">
-      <div class="podcast-cover" style="background:${pod.coverColor}">
+      <div class="podcast-cover" style="${coverStyle}">
         ${pod.owned ? '' : `<div class="lock-badge">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F0C25E" stroke-width="2.4"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
         </div>`}
       </div>
       <div class="podcast-meta-name">${pod.title}</div>
       <div class="podcast-meta-host">${pod.host}</div>
-      <div class="podcast-duration">${pod.audioSrc ? 'Tap to test audio' : formatTime(pod.duration)} · ${pod.lang}</div>
+      <div class="podcast-duration">${pod.hasAudio ? formatTime(pod.duration) : 'No audio yet'} · ${pod.lang}</div>
     </div>
   `;
 }
@@ -1375,136 +1428,90 @@ function renderPodcastShelf() {
   shelf.querySelectorAll('.podcast-card').forEach(card => {
     card.addEventListener('click', () => {
       const pod = PODCASTS.find(p => p.id === card.dataset.id);
-      if (pod.owned) {
-        openPodcast(pod.id);
-      } else {
-        showToast("This podcast isn't part of your purchase yet.");
-      }
+      if (!pod.owned) { showToast("This podcast isn't part of your purchase yet."); return; }
+      if (!pod.hasAudio) { showToast("No audio has been uploaded for this episode yet."); return; }
+      openPodcast(pod.id);
     });
   });
 }
 
 let currentPodcast = null;
-let podcastTimer = null;
-let podcastCurrentTime = 0;
 let podcastPlaying = false;
 let podcastSpeed = 1;
 const podcastAudioEl = document.getElementById('podcastAudioEl');
 
-function usingRealAudio() {
-  return !!(currentPodcast && currentPodcast.audioSrc);
-}
-
-function openPodcast(id) {
+async function openPodcast(id) {
   currentPodcast = PODCASTS.find(p => p.id === id);
-  podcastCurrentTime = 0;
   podcastSpeed = 1;
   document.getElementById('podcastSpeedBtn').textContent = '1x speed';
   document.getElementById('podcastArt').style.background = currentPodcast.coverColor;
   document.getElementById('podcastTitleEl').textContent = currentPodcast.title;
   document.getElementById('podcastHostEl').textContent = currentPodcast.host;
+  document.getElementById('podcastTimeTotal').textContent = '--:--';
 
   podcastAudioEl.pause();
   podcastAudioEl.currentTime = 0;
+  podcastAudioEl.playbackRate = 1;
+  podcastAudioEl.removeAttribute('src');
 
-  if (usingRealAudio()) {
-    document.getElementById('podcastTimeTotal').textContent = '--:--';
-    podcastAudioEl.src = currentPodcast.audioSrc;
-    podcastAudioEl.playbackRate = 1;
-  } else {
-    document.getElementById('podcastTimeTotal').textContent = formatTime(currentPodcast.duration);
-    podcastAudioEl.removeAttribute('src');
-  }
-
-  updatePodcastProgress();
   document.getElementById('libraryView').style.display = 'none';
   document.getElementById('podcastView').classList.add('active');
+
+  const { data, error } = await sb.functions.invoke('get-podcast-audio-url', { body: { podcastId: id } });
+  if (error || data?.error) {
+    showToast('Could not load audio: ' + (data?.error || error.message));
+    return;
+  }
+  podcastAudioEl.src = data.url;
   playPodcast();
 }
 
 function updatePodcastProgress() {
-  const total = usingRealAudio() ? (podcastAudioEl.duration || 0) : currentPodcast.duration;
-  const cur = usingRealAudio() ? podcastAudioEl.currentTime : podcastCurrentTime;
+  const total = podcastAudioEl.duration || 0;
+  const cur = podcastAudioEl.currentTime || 0;
   const pct = total ? (cur / total) * 100 : 0;
   document.getElementById('podcastScrubFill').style.width = pct + '%';
   document.getElementById('podcastTimeCurrent').textContent = formatTime(cur);
-  if (usingRealAudio() && total) {
-    document.getElementById('podcastTimeTotal').textContent = formatTime(total);
-  }
+  if (total) document.getElementById('podcastTimeTotal').textContent = formatTime(total);
 }
 
 function playPodcast() {
   podcastPlaying = true;
   document.getElementById('podcastPlayIcon').style.display = 'none';
   document.getElementById('podcastPauseIcon').style.display = 'block';
-  clearInterval(podcastTimer);
-
-  if (usingRealAudio()) {
-    podcastAudioEl.play().catch(() => {
-      showToast("Couldn't load real audio right now — check your internet connection.");
-      pausePodcast();
-    });
-    return;
-  }
-
-  podcastTimer = setInterval(() => {
-    podcastCurrentTime += 1 * podcastSpeed;
-    if (podcastCurrentTime >= currentPodcast.duration) {
-      podcastCurrentTime = currentPodcast.duration;
-      pausePodcast();
-      showToast("Episode finished.");
-    }
-    updatePodcastProgress();
-  }, 1000);
+  podcastAudioEl.play().catch(() => {
+    showToast("Couldn't play audio right now — check your connection.");
+    pausePodcast();
+  });
 }
 
 function pausePodcast() {
   podcastPlaying = false;
   document.getElementById('podcastPlayIcon').style.display = 'block';
   document.getElementById('podcastPauseIcon').style.display = 'none';
-  clearInterval(podcastTimer);
-  if (usingRealAudio()) podcastAudioEl.pause();
+  podcastAudioEl.pause();
 }
 
-podcastAudioEl.addEventListener('timeupdate', () => {
-  if (usingRealAudio() && podcastPlaying) updatePodcastProgress();
-});
-podcastAudioEl.addEventListener('loadedmetadata', () => {
-  if (usingRealAudio()) updatePodcastProgress();
-});
-podcastAudioEl.addEventListener('ended', () => {
-  pausePodcast();
-  showToast("Episode finished.");
-});
+podcastAudioEl.addEventListener('timeupdate', () => { if (podcastPlaying) updatePodcastProgress(); });
+podcastAudioEl.addEventListener('loadedmetadata', updatePodcastProgress);
+podcastAudioEl.addEventListener('ended', () => { pausePodcast(); showToast("Episode finished."); });
 
 document.getElementById('podcastPlayBtn').addEventListener('click', () => {
   podcastPlaying ? pausePodcast() : playPodcast();
 });
 document.getElementById('podcastSkipBack').addEventListener('click', () => {
-  if (usingRealAudio()) {
-    podcastAudioEl.currentTime = Math.max(0, podcastAudioEl.currentTime - 15);
-  } else {
-    podcastCurrentTime = Math.max(0, podcastCurrentTime - 15);
-  }
+  podcastAudioEl.currentTime = Math.max(0, podcastAudioEl.currentTime - 15);
   updatePodcastProgress();
 });
 document.getElementById('podcastSkipFwd').addEventListener('click', () => {
-  if (usingRealAudio()) {
-    podcastAudioEl.currentTime = Math.min(podcastAudioEl.duration || 0, podcastAudioEl.currentTime + 15);
-  } else {
-    podcastCurrentTime = Math.min(currentPodcast.duration, podcastCurrentTime + 15);
-  }
+  podcastAudioEl.currentTime = Math.min(podcastAudioEl.duration || 0, podcastAudioEl.currentTime + 15);
   updatePodcastProgress();
 });
 document.getElementById('podcastScrubTrack').addEventListener('click', (e) => {
   const rect = e.currentTarget.getBoundingClientRect();
   const ratio = (e.clientX - rect.left) / rect.width;
-  if (usingRealAudio()) {
-    const total = podcastAudioEl.duration || 0;
-    podcastAudioEl.currentTime = Math.max(0, Math.min(total, ratio * total));
-  } else {
-    podcastCurrentTime = Math.max(0, Math.min(currentPodcast.duration, ratio * currentPodcast.duration));
-  }
+  const total = podcastAudioEl.duration || 0;
+  podcastAudioEl.currentTime = Math.max(0, Math.min(total, ratio * total));
   updatePodcastProgress();
 });
 document.getElementById('podcastSpeedBtn').addEventListener('click', (e) => {
@@ -1512,7 +1519,7 @@ document.getElementById('podcastSpeedBtn').addEventListener('click', (e) => {
   const idx = speeds.indexOf(podcastSpeed);
   podcastSpeed = speeds[(idx + 1) % speeds.length];
   e.target.textContent = podcastSpeed + 'x speed';
-  if (usingRealAudio()) podcastAudioEl.playbackRate = podcastSpeed;
+  podcastAudioEl.playbackRate = podcastSpeed;
 });
 document.getElementById('podcastBackBtn').addEventListener('click', () => {
   pausePodcast();
@@ -1656,11 +1663,8 @@ document.getElementById('uiLangBtn').addEventListener('click', cycleUiLang);
 document.getElementById('uiLangBtnLogin').addEventListener('click', cycleUiLang);
 
 /* ============ Init ============ */
-populateLangDropdown();
-renderLibrary();
-renderNotifications();
-renderPodcastShelf();
-if (NOTIFICATIONS.length) document.getElementById('bellDot').classList.add('show');
+checkSession();
+
 </script>
 </body>
 </html>
