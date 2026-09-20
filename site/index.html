@@ -6,6 +6,8 @@
 <title>King's Library</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;0,7..72,600;0,7..72,700;1,7..72,400&family=Inter:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&family=Noto+Sans+Gurmukhi:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/supabaseClient.js"></script>
 <style>
   :root {
     --ink: #0A121C;
@@ -407,53 +409,41 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const BOOKS = [
-  { id:'b1', title:"The Silent Hymn", author:"M. Okafor", lang:"English", price:199, coverColor:"#3E5A78",
-    chapters:[
-      { label:"Chapter One", title:"The Quiet Room", paras:[
-        "The chapel was empty at that hour, save for the dust turning slow circles in the light.",
-        "Elena had come every evening that week, not to pray exactly, but to sit where the singing used to be.",
-        "She remembered her grandmother's voice filling this very room, rough and warm, carrying the last note longer than anyone thought possible.",
-        "Tonight the silence felt different. Not absence, but a held breath, waiting for something to begin again."
-      ]}
-    ]},
-  { id:'b2', title:"जीवन का गीत", author:"अनिता शर्मा", lang:"Hindi", price:149, coverColor:"#7A4A3A", devanagari:true,
-    chapters:[
-      { label:"अध्याय एक", title:"सुबह की पहली किरण", paras:[
-        "गाँव में सुबह की पहली किरण के साथ ही पक्षियों का गीत शुरू हो जाता था।",
-        "राधा हर दिन उसी पेड़ के नीचे बैठकर अपनी दादी की कहानियाँ सुनती थी।",
-        "दादी कहती थीं कि हर सुबह एक नया गीत लेकर आती है, बस सुनने वाला कान चाहिए।",
-        "राधा ने आँखें बंद कीं और हवा में तैरते सुरों को महसूस किया।"
-      ]}
-    ]},
-  { id:'b3', title:"ਜ਼ਿੰਦਗੀ ਦਾ ਗੀਤ", author:"ਹਰਪ੍ਰੀਤ ਕੌਰ", lang:"Punjabi", price:159, coverColor:"#4A5D45", gurmukhi:true,
-    chapters:[
-      { label:"ਅਧਿਆਇ ਇੱਕ", title:"ਸਵੇਰ ਦੀ ਪਹਿਲੀ ਕਿਰਨ", paras:[
-        "ਪਿੰਡ ਵਿੱਚ ਸਵੇਰ ਦੀ ਪਹਿਲੀ ਕਿਰਨ ਨਾਲ ਹੀ ਪੰਛੀਆਂ ਦਾ ਗੀਤ ਸ਼ੁਰੂ ਹੋ ਜਾਂਦਾ ਸੀ।",
-        "ਸਿਮਰਨ ਹਰ ਰੋਜ਼ ਉਸੇ ਰੁੱਖ ਹੇਠਾਂ ਬੈਠ ਕੇ ਆਪਣੀ ਦਾਦੀ ਦੀਆਂ ਕਹਾਣੀਆਂ ਸੁਣਦੀ ਸੀ।",
-        "ਦਾਦੀ ਕਹਿੰਦੀ ਸੀ ਕਿ ਹਰ ਸਵੇਰ ਇੱਕ ਨਵਾਂ ਗੀਤ ਲੈ ਕੇ ਆਉਂਦੀ ਹੈ, ਬੱਸ ਸੁਣਨ ਵਾਲਾ ਕੰਨ ਚਾਹੀਦਾ ਹੈ।",
-        "ਸਿਮਰਨ ਨੇ ਅੱਖਾਂ ਬੰਦ ਕੀਤੀਆਂ ਅਤੇ ਹਵਾ ਵਿੱਚ ਤੈਰਦੇ ਸੁਰਾਂ ਨੂੰ ਮਹਿਸੂਸ ਕੀਤਾ।"
-      ]}
-    ]},
-  { id:'b5', title:"Letters to a Young Composer", author:"R. Whitfield", lang:"English", price:299, coverColor:"#5C4A78",
-    chapters:[
-      { label:"Chapter Nine", title:"On Finishing", paras:[
-        "You will want to keep changing it forever. Every composer does.",
-        "But a piece is not abandoned when you stop — it is released, the way a held note must eventually end for the next one to begin.",
-        "Trust that the silence after the last note is also part of the music.",
-        "Let it go, and start the next one."
-      ]}
-    ]},
-  { id:'b12', title:"The Watchmaker's Silence", author:"H. Ainsworth", lang:"English", price:259, coverColor:"#6B5A3E",
-    chapters:[
-      { label:"Chapter One", title:"The Last Wind-Up", paras:[
-        "The old shop smelled of oil and brass, and every clock inside told a slightly different time.",
-        "Thomas had inherited the shop, but not, it seemed, his grandfather's patience for silence.",
-        "Each evening he wound the largest clock by hand, though it had not kept correct time in years.",
-        "Some habits, he decided, were not about being right — only about not forgetting."
-      ]}
-    ]}
-];
+const CONTACT_EMAIL = 'malviyadheerajkumar@gmail.com';
+
+/* ---------- Supabase-backed catalog ---------- */
+let BOOKS = [];
+let PODCASTS = [];
+
+async function loadBooks() {
+  const { data, error } = await sb.from('books').select('*').eq('status', 'published').order('created_at');
+  if (error) { console.error(error); return; }
+  BOOKS = (data || []).map(b => ({
+    id: b.id,
+    title: b.title,
+    author: b.author,
+    lang: b.lang,
+    price: b.price,
+    coverColor: b.cover_color,
+    coverImage: b.cover_image_url,
+    sampleText: b.sample_text,
+  }));
+}
+
+async function loadPodcasts() {
+  const { data, error } = await sb.from('podcasts').select('*').eq('status', 'published').order('created_at');
+  if (error) { console.error(error); return; }
+  PODCASTS = (data || []).map(p => ({
+    id: p.id,
+    title: p.title,
+    host: p.host,
+    lang: p.lang,
+    price: p.price,
+    coverColor: p.cover_color,
+    coverImage: p.cover_image_url,
+    duration: p.duration_sec || 0,
+  }));
+}
 
 /* ---------- Section navigation ---------- */
 function showSection(name) {
@@ -474,9 +464,12 @@ function renderLangPills() {
 /* ---------- Browse grid ---------- */
 function bookCardHTML(book) {
   const priceLabel = book.price ? `₹${book.price}` : 'Price TBD';
+  const coverStyle = book.coverImage
+    ? `background-image:url('${book.coverImage}');background-size:cover;background-position:center;`
+    : `background:${book.coverColor}`;
   return `
     <div class="book-card">
-      <div class="book-cover" style="background:${book.coverColor}">
+      <div class="book-cover" style="${coverStyle}">
         <div class="book-title-on-cover">${book.title}</div>
       </div>
       <div class="book-meta">
@@ -527,6 +520,7 @@ function renderGrid() {
 
 function populateLangSelect() {
   const select = document.getElementById('webLangSelect');
+  select.querySelectorAll('option:not(:first-child)').forEach(o => o.remove());
   const langs = [...new Set(BOOKS.map(b => b.lang))].sort();
   langs.forEach(l => {
     const opt = document.createElement('option');
@@ -544,14 +538,13 @@ document.getElementById('webPodLangSelect').addEventListener('change', renderPod
 function openSample(id) {
   const book = BOOKS.find(b => b.id === id);
   document.getElementById('readerBookTitle').textContent = book.title;
-  const ch = book.chapters[0];
   const stage = document.getElementById('readerStage');
   stage.className = 'reader-stage' + (book.rtl ? ' rtl' : '') + (book.devanagari ? ' devanagari' : '') + (book.gurmukhi ? ' gurmukhi' : '');
   const priceLabel = book.price ? `₹${book.price}` : tr('priceTBA');
+  const paras = (book.sampleText || '').split(/\n\s*\n/).filter(Boolean);
   stage.innerHTML = `
-    <div class="chapter-label">${ch.label} · ${tr('freeSample')}</div>
-    <div class="chapter-title">${ch.title}</div>
-    ${ch.paras.map(p => `<p>${p}</p>`).join('')}
+    <div class="chapter-label">${tr('freeSample')}</div>
+    ${paras.length ? paras.map(p => `<p>${p}</p>`).join('') : `<p>${tr('noSampleYet')}</p>`}
     <div class="paywall-block">
       <p>${tr('paywallText')} ${book.title} — ${priceLabel}.</p>
       <button class="btn-primary" onclick="buyBook('${book.id}')" ${book.price ? '' : 'disabled'}>${tr('buyNow')} — ${priceLabel}</button>
@@ -563,7 +556,15 @@ function openSample(id) {
 
 function buyBook(id) {
   const book = BOOKS.find(b => b.id === id);
-  showToast(`${tr('demoCheckout')} "${book.title}".`);
+  requestPurchase(book.title, book.price);
+}
+
+function requestPurchase(title, price) {
+  const priceLabel = price ? `₹${price}` : tr('priceTBA');
+  const subject = encodeURIComponent(`King's Library — purchase request: ${title}`);
+  const body = encodeURIComponent(`Hi,\n\nI'd like to buy "${title}" (${priceLabel}) from King's Library.\n\nMy email for access: \n`);
+  showToast(`${tr('buyEmailInstruction')} ${CONTACT_EMAIL}`);
+  window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
 }
 
 /* ---------- Toast ---------- */
@@ -644,15 +645,7 @@ readerStageEl.addEventListener('touchend', (e) => {
   if (e.touches.length < 2) pinchStartDist = null;
 });
 
-/* ---------- Podcasts ---------- */
-const PODCASTS = [
-  { id: 'p0', title: "Demo Episode — Test the Player", host: "King's Library", lang: "English", price: 0, coverColor: "#8B6F3E", duration: 0, audioSrc: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-  { id: 'p1', title: "Hymns Behind the Story", host: "King's Library Studio", lang: "English", price: 99, coverColor: "#3E5A78", duration: 1140 },
-  { id: 'p2', title: "ਸੰਗੀਤ ਦੀਆਂ ਗੱਲਾਂ", host: "ਹਰਪ੍ਰੀਤ ਕੌਰ", lang: "Punjabi", price: 79, coverColor: "#4A5D45", duration: 900 },
-  { id: 'p3', title: "लेखक से बातचीत", host: "अनिता शर्मा", lang: "Hindi", price: 79, coverColor: "#7A4A3A", duration: 1320 },
-  { id: 'p4', title: "Writing in Silence", host: "H. Ainsworth", lang: "English", price: 89, coverColor: "#6B5A3E", duration: 1020 },
-];
-
+/* ---------- Podcasts (simulated 30s preview — real episodes are private) ---------- */
 function formatDur(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
@@ -660,15 +653,17 @@ function formatDur(sec) {
 }
 
 function podcastCardHTML2(pod) {
-  const durLabel = pod.audioSrc ? 'Tap to test audio' : formatDur(pod.duration);
+  const coverStyle = pod.coverImage
+    ? `background-image:url('${pod.coverImage}');background-size:cover;background-position:center;`
+    : `background:${pod.coverColor}`;
   return `
     <div class="podcast-card2">
-      <div class="podcast-cover2" style="background:${pod.coverColor}"></div>
+      <div class="podcast-cover2" style="${coverStyle}"></div>
       <div class="podcast-name2">${pod.title}</div>
       <div class="podcast-host2">${pod.host}</div>
-      <div class="podcast-row2"><span>${durLabel} · ${pod.lang}</span><span class="podcast-price2">${pod.price ? '₹' + pod.price : 'Free'}</span></div>
-      <button class="listen-btn" data-id="${pod.id}">${pod.audioSrc ? tr('playDemoAudio') : tr('listenToSample')}</button>
-      <button class="buy-btn2" data-id="${pod.id}" ${pod.audioSrc ? 'style="display:none;"' : ''}>${tr('buyNow')}</button>
+      <div class="podcast-row2"><span>${formatDur(pod.duration)} · ${pod.lang}</span><span class="podcast-price2">${pod.price ? '₹' + pod.price : 'Free'}</span></div>
+      <button class="listen-btn" data-id="${pod.id}">${tr('listenToSample')}</button>
+      <button class="buy-btn2" data-id="${pod.id}">${tr('buyNow')}</button>
       <div class="mini-player" id="mini-${pod.id}">
         <div class="mini-player-row">
           <button class="mini-play-btn" data-id="${pod.id}">
@@ -676,9 +671,8 @@ function podcastCardHTML2(pod) {
             <svg class="mini-pause-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
           </button>
           <div class="mini-scrub-track" data-id="${pod.id}"><div class="mini-scrub-fill" id="fill-${pod.id}"></div></div>
-          <span class="mini-time" id="time-${pod.id}">0:00 / ${pod.audioSrc ? '--:--' : '0:30'}</span>
+          <span class="mini-time" id="time-${pod.id}">0:00 / 0:30</span>
         </div>
-        ${pod.audioSrc ? `<audio id="audio-${pod.id}" preload="none" src="${pod.audioSrc}" style="display:none;"></audio>` : ''}
       </div>
     </div>
   `;
@@ -696,6 +690,7 @@ function getFilteredPodcasts() {
 
 function populatePodLangSelect() {
   const select = document.getElementById('webPodLangSelect');
+  select.querySelectorAll('option:not(:first-child)').forEach(o => o.remove());
   const langs = [...new Set(PODCASTS.map(p => p.lang))].sort();
   langs.forEach(l => {
     const opt = document.createElement('option');
@@ -715,7 +710,7 @@ function renderPodcastGrid() {
   document.querySelectorAll('.buy-btn2').forEach(btn => {
     btn.addEventListener('click', () => {
       const pod = PODCASTS.find(p => p.id === btn.dataset.id);
-      showToast(`${tr('demoCheckout')} "${pod.title}".`);
+      requestPurchase(pod.title, pod.price);
     });
   });
   document.querySelectorAll('.mini-play-btn').forEach(btn => {
@@ -733,8 +728,6 @@ function renderPodcastGrid() {
 const SAMPLE_LEN = 30; // 30-second free preview
 let miniState = {}; // { id: { time, playing, timer } }
 
-function getPod(id) { return PODCASTS.find(p => p.id === id); }
-
 function toggleMiniPlayer(id) {
   const el = document.getElementById('mini-' + id);
   const isOpen = el.classList.toggle('open');
@@ -746,52 +739,18 @@ function toggleMiniPlayer(id) {
 }
 
 function updateMiniUI(id) {
-  const pod = getPod(id);
   const s = miniState[id];
-  if (pod.audioSrc) {
-    const audioEl = document.getElementById('audio-' + id);
-    const total = audioEl.duration || 0;
-    const pct = total ? (audioEl.currentTime / total) * 100 : 0;
-    document.getElementById('fill-' + id).style.width = pct + '%';
-    document.getElementById('time-' + id).textContent = `${formatDur(audioEl.currentTime)} / ${total ? formatDur(total) : '--:--'}`;
-  } else {
-    const pct = (s.time / SAMPLE_LEN) * 100;
-    document.getElementById('fill-' + id).style.width = pct + '%';
-    document.getElementById('time-' + id).textContent = `${formatDur(s.time)} / 0:${SAMPLE_LEN}`;
-  }
+  const pct = (s.time / SAMPLE_LEN) * 100;
+  document.getElementById('fill-' + id).style.width = pct + '%';
+  document.getElementById('time-' + id).textContent = `${formatDur(s.time)} / 0:${SAMPLE_LEN}`;
 }
 
 function toggleMiniPlay(id) {
-  const pod = getPod(id);
   if (!miniState[id]) miniState[id] = { time: 0, playing: false, timer: null };
   const s = miniState[id];
   const card = document.getElementById('mini-' + id).closest('.podcast-card2');
   const playIcon = card.querySelector('.mini-play-icon');
   const pauseIcon = card.querySelector('.mini-pause-icon');
-
-  if (pod.audioSrc) {
-    const audioEl = document.getElementById('audio-' + id);
-    if (s.playing) {
-      audioEl.pause();
-      s.playing = false;
-      playIcon.style.display = 'block';
-      pauseIcon.style.display = 'none';
-    } else {
-      audioEl.play().catch(() => showToast(tr('audioLoadError')));
-      s.playing = true;
-      playIcon.style.display = 'none';
-      pauseIcon.style.display = 'block';
-      audioEl.ontimeupdate = () => updateMiniUI(id);
-      audioEl.onloadedmetadata = () => updateMiniUI(id);
-      audioEl.onended = () => {
-        s.playing = false;
-        playIcon.style.display = 'block';
-        pauseIcon.style.display = 'none';
-        showToast(tr('demoTrackFinished'));
-      };
-    }
-    return;
-  }
 
   if (s.playing) {
     clearInterval(s.timer);
@@ -818,15 +777,7 @@ function toggleMiniPlay(id) {
 }
 
 function seekMini(id, ratio) {
-  const pod = getPod(id);
   if (!miniState[id]) miniState[id] = { time: 0, playing: false, timer: null };
-  if (pod.audioSrc) {
-    const audioEl = document.getElementById('audio-' + id);
-    const total = audioEl.duration || 0;
-    audioEl.currentTime = Math.max(0, Math.min(total, ratio * total));
-    updateMiniUI(id);
-    return;
-  }
   miniState[id].time = Math.max(0, Math.min(SAMPLE_LEN, Math.round(ratio * SAMPLE_LEN)));
   updateMiniUI(id);
 }
@@ -864,14 +815,12 @@ const UI_STRINGS = {
     buyNow: "Buy Now",
     noBooksFound: "No books found.",
     freeSample: "Free Sample",
+    noSampleYet: "No sample available for this book yet — check back soon.",
     priceTBA: "price to be announced",
     paywallText: "You've reached the end of this free sample. Unlock",
-    demoCheckout: "Demo checkout — in the real app, this takes you to payment, then emails your app link + OTP for",
+    buyEmailInstruction: "To purchase, email us at",
     listenToSample: "Listen to Sample",
-    playDemoAudio: "Play Demo Audio",
     noPodcastsFound: "No podcasts found.",
-    audioLoadError: "Couldn't load real audio right now — check your internet connection.",
-    demoTrackFinished: "Demo track finished.",
     freePreviewEnded: "Free preview ended — Buy Now to hear the full episode.",
     share: "Share"
   },
@@ -906,14 +855,12 @@ const UI_STRINGS = {
     buyNow: "अभी खरीदें",
     noBooksFound: "कोई किताब नहीं मिली।",
     freeSample: "मुफ़्त नमूना",
+    noSampleYet: "इस किताब के लिए अभी कोई नमूना उपलब्ध नहीं है — जल्द जांचें।",
     priceTBA: "कीमत जल्द बताई जाएगी",
     paywallText: "आप इस मुफ़्त नमूने के अंत तक पहुँच गए हैं। पूरी किताब अनलॉक करें",
-    demoCheckout: "डेमो चेकआउट — असली ऐप में, यह आपको भुगतान पर ले जाएगा, फिर आपके ऐप लिंक + OTP ईमेल करेगा",
+    buyEmailInstruction: "खरीदने के लिए, हमें ईमेल करें",
     listenToSample: "नमूना सुनें",
-    playDemoAudio: "डेमो ऑडियो चलाएं",
     noPodcastsFound: "कोई पॉडकास्ट नहीं मिला।",
-    audioLoadError: "अभी असली ऑडियो लोड नहीं हो सका — अपना इंटरनेट कनेक्शन जांचें।",
-    demoTrackFinished: "डेमो ट्रैक समाप्त हुआ।",
     freePreviewEnded: "मुफ़्त पूर्वावलोकन समाप्त हुआ — पूरा एपिसोड सुनने के लिए अभी खरीदें।",
     share: "साझा करें"
   },
@@ -948,14 +895,12 @@ const UI_STRINGS = {
     buyNow: "ਹੁਣੇ ਖਰੀਦੋ",
     noBooksFound: "ਕੋਈ ਕਿਤਾਬ ਨਹੀਂ ਮਿਲੀ।",
     freeSample: "ਮੁਫ਼ਤ ਨਮੂਨਾ",
+    noSampleYet: "ਇਸ ਕਿਤਾਬ ਲਈ ਹਾਲੇ ਕੋਈ ਨਮੂਨਾ ਉਪਲਬਧ ਨਹੀਂ — ਜਲਦੀ ਦੁਬਾਰਾ ਵੇਖੋ।",
     priceTBA: "ਕੀਮਤ ਜਲਦੀ ਦੱਸੀ ਜਾਵੇਗੀ",
     paywallText: "ਤੁਸੀਂ ਇਸ ਮੁਫ਼ਤ ਨਮੂਨੇ ਦੇ ਅੰਤ ਤੱਕ ਪਹੁੰਚ ਗਏ ਹੋ। ਪੂਰੀ ਕਿਤਾਬ ਅਨਲੌਕ ਕਰੋ",
-    demoCheckout: "ਡੈਮੋ ਚੈੱਕਆਊਟ — ਅਸਲੀ ਐਪ ਵਿੱਚ, ਇਹ ਤੁਹਾਨੂੰ ਭੁਗਤਾਨ 'ਤੇ ਲੈ ਜਾਵੇਗਾ, ਫਿਰ ਤੁਹਾਡਾ ਐਪ ਲਿੰਕ + OTP ਈਮੇਲ ਕਰੇਗਾ",
+    buyEmailInstruction: "ਖਰੀਦਣ ਲਈ, ਸਾਨੂੰ ਈਮੇਲ ਕਰੋ",
     listenToSample: "ਨਮੂਨਾ ਸੁਣੋ",
-    playDemoAudio: "ਡੈਮੋ ਆਡੀਓ ਚਲਾਓ",
     noPodcastsFound: "ਕੋਈ ਪੌਡਕਾਸਟ ਨਹੀਂ ਮਿਲਿਆ।",
-    audioLoadError: "ਹੁਣੇ ਅਸਲੀ ਆਡੀਓ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕਿਆ — ਆਪਣਾ ਇੰਟਰਨੈੱਟ ਕਨੈਕਸ਼ਨ ਜਾਂਚੋ।",
-    demoTrackFinished: "ਡੈਮੋ ਟਰੈਕ ਖਤਮ ਹੋਇਆ।",
     freePreviewEnded: "ਮੁਫ਼ਤ ਝਲਕ ਖਤਮ ਹੋਈ — ਪੂਰਾ ਐਪੀਸੋਡ ਸੁਣਨ ਲਈ ਹੁਣੇ ਖਰੀਦੋ।",
     share: "ਸਾਂਝਾ ਕਰੋ"
   }
@@ -1026,11 +971,17 @@ function cycleUiLang() {
 document.getElementById('uiLangBtnSite').addEventListener('click', cycleUiLang);
 
 /* ---------- Init ---------- */
-renderLangPills();
-populateLangSelect();
-renderGrid();
-populatePodLangSelect();
-renderPodcastGrid();
+async function init() {
+  await loadBooks();
+  await loadPodcasts();
+  renderLangPills();
+  populateLangSelect();
+  renderGrid();
+  populatePodLangSelect();
+  renderPodcastGrid();
+}
+init();
+
 </script>
 </body>
 </html>
