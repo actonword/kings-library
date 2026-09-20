@@ -86,6 +86,25 @@
   .icon-btn:hover { border-color: rgba(212,175,106,0.4); }
   .nav-right { display: flex; align-items: center; gap: 10px; }
   @media (max-width: 720px) { .nav-links { display: none; } }
+  .mobile-nav-btn { display: none; }
+  @media (max-width: 720px) {
+    .mobile-nav-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--ink-soft); border: 1px solid rgba(233,226,208,0.1);
+      color: var(--gold-bright); cursor: pointer; flex-shrink: 0;
+    }
+  }
+  .nav-links.mobile-open {
+    display: flex; flex-direction: column; gap: 2px;
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: var(--ink-soft); padding: 10px 16px 14px;
+    border-bottom: 1px solid rgba(233,226,208,0.1);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.35);
+    z-index: 49;
+  }
+  .nav-links.mobile-open button { width: 100%; text-align: left; padding: 10px 4px; font-size: 14px; }
+  body.light-site .nav-links.mobile-open { background: var(--ink-soft); }
 
 
   section { display: none; }
@@ -342,6 +361,9 @@
       <button onclick="showSection('about')" data-nav="about" id="navAbout">About</button>
     </div>
     <div class="nav-right">
+      <button class="mobile-nav-btn" id="siteMobileNavBtn" title="Menu" aria-label="Open menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
       <button class="icon-btn" id="shareSiteBtn" title="Share King's Library">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9"/></svg>
       </button>
@@ -565,8 +587,18 @@ function showSection(name) {
   document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
   const navBtn = document.querySelector(`.nav-links button[data-nav="${name}"]`);
   if (navBtn) navBtn.classList.add('active');
+  document.querySelector('.nav-links').classList.remove('mobile-open');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+/* ---------- Mobile nav menu ---------- */
+document.getElementById('siteMobileNavBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.querySelector('.nav-links').classList.toggle('mobile-open');
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.nav')) document.querySelector('.nav-links').classList.remove('mobile-open');
+});
 
 /* ---------- Language pills on homepage ---------- */
 function renderLangPills() {
