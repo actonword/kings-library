@@ -216,6 +216,7 @@
   .book-meta { font-size: 12.5px; }
   .book-name { font-weight: 500; margin-bottom: 2px; }
   .book-author { color: var(--text-on-ink-dim); font-size: 11.5px; margin-bottom: 6px; }
+  .book-desc { color: var(--text-on-ink-dim); font-size: 11.5px; line-height: 1.5; margin-bottom: 8px; }
   .book-lang-tag { display: inline-block; font-size: 10px; color: var(--gold-bright); border: 1px solid rgba(212,175,106,0.35); border-radius: 20px; padding: 1px 7px; }
   .book-row-tags { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; }
   .book-price { font-size: 12.5px; font-weight: 700; color: var(--gold-bright); font-family: var(--serif); }
@@ -432,6 +433,7 @@ async function loadBooks() {
     author: b.author,
     lang: b.lang,
     price: b.price,
+    description: b.description,
     coverColor: b.cover_color,
     coverImage: b.cover_image_url,
     sampleText: b.sample_text,
@@ -484,6 +486,7 @@ function bookCardHTML(book) {
       <div class="book-meta">
         <div class="book-name">${book.title}</div>
         <div class="book-author">${book.author}</div>
+        ${book.description ? `<div class="book-desc">${book.description}</div>` : ''}
         <div class="book-row-tags">
           <span class="book-lang-tag">${book.lang}</span>
           <span class="book-price">${priceLabel}</span>

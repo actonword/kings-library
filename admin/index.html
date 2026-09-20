@@ -287,6 +287,7 @@
           <div class="form-field"><label>Author</label><input type="text" id="newBookAuthor" placeholder="Author name"></div>
           <div class="form-field"><label>Language</label><input type="text" id="newBookLang" placeholder="e.g. English, Hindi, Arabic"></div>
           <div class="form-field"><label>Price (₹)</label><input type="number" id="newBookPrice" placeholder="Decide later — leave blank"></div>
+          <div class="form-field full"><label>Description</label><textarea id="newBookDescription" placeholder="A short description of this book..."></textarea></div>
           <div class="form-field full">
             <label>Cover Color (used if no image is uploaded)</label>
             <div class="color-swatches" id="colorSwatches"></div>
@@ -752,6 +753,7 @@ async function addBook() {
   const author = document.getElementById('newBookAuthor').value.trim();
   const lang = document.getElementById('newBookLang').value.trim();
   const priceVal = document.getElementById('newBookPrice').value;
+  const description = document.getElementById('newBookDescription').value.trim();
   const contentText = document.getElementById('newBookContent').value.trim();
 
   if (!title || !author || !lang) {
@@ -770,6 +772,7 @@ async function addBook() {
   const { error } = await sb.from('books').insert({
     id, title, author, lang,
     price: priceVal === '' ? null : Number(priceVal),
+    description: description || null,
     cover_color: selectedColor,
     cover_image_url: coverImageUrl,
     sample_text: contentText || null,
@@ -785,6 +788,7 @@ async function addBook() {
   document.getElementById('newBookAuthor').value = '';
   document.getElementById('newBookLang').value = '';
   document.getElementById('newBookPrice').value = '';
+  document.getElementById('newBookDescription').value = '';
   document.getElementById('newBookContent').value = '';
   bookFileInput.value = '';
   uploadBox.classList.remove('has-file');
