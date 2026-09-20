@@ -333,12 +333,33 @@
 
   .shelf-row { margin-bottom: 40px; }
 
-  .lib-tabs { display: flex; gap: 8px; margin-bottom: 26px; }
+  .lib-tabs { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 26px; }
+  .lib-tabs-left { display: flex; gap: 8px; }
   .lib-tab {
     background: none; border: 1px solid rgba(233,226,208,0.12); color: var(--text-on-ink-dim);
     padding: 8px 18px; border-radius: 20px; font-size: 13px; font-family: var(--sans); cursor: pointer;
   }
   .lib-tab.active { background: rgba(212,175,106,0.14); border-color: rgba(212,175,106,0.4); color: var(--gold-bright); }
+  .layout-toggle { display: flex; gap: 2px; background: var(--ink-soft); border: 1px solid rgba(233,226,208,0.1); border-radius: 8px; padding: 3px; flex-shrink: 0; }
+  .layout-toggle-btn { background: none; border: none; color: var(--text-on-ink-dim); cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+  .layout-toggle-btn.active { background: rgba(212,175,106,0.16); color: var(--gold-bright); }
+
+  /* ---------- List layout (alternative to the grid shelves) ---------- */
+  .shelf.list-view { display: flex; flex-direction: column; gap: 4px; }
+  .shelf.list-view .book-card,
+  .shelf.list-view .podcast-card {
+    flex-direction: row; align-items: center; gap: 12px; width: 100%;
+    padding: 8px; border-radius: 8px;
+  }
+  .shelf.list-view .book-card:hover,
+  .shelf.list-view .podcast-card:hover { background: rgba(233,226,208,0.05); transform: none; }
+  .shelf.list-view .book-cover { width: 44px; flex-shrink: 0; }
+  .shelf.list-view .book-title-on-cover { display: none; }
+  .shelf.list-view .book-progress-bar { display: none; }
+  .shelf.list-view .book-meta { flex: 1; min-width: 0; }
+  .shelf.list-view .podcast-cover { width: 44px; height: 44px; flex-shrink: 0; }
+  .shelf.list-view .podcast-cover::after { font-size: 18px; }
+  .shelf.list-view .podcast-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 
   .podcast-view {
     display: none;
@@ -366,6 +387,8 @@
   .podcast-art::after {
     content: '🎙️'; font-size: 48px; opacity: 0.85;
   }
+  .podcast-art.has-image::after { content: none; }
+  .podcast-cover.has-image::after { content: none; }
   .podcast-title { font-family: var(--serif); font-size: 19px; font-weight: 600; text-align: center; margin-bottom: 4px; max-width: 320px; }
   .podcast-host { font-size: 13px; color: var(--text-on-ink-dim); margin-bottom: 30px; }
   .podcast-desc { font-size: 12.5px; color: var(--text-on-ink-dim); line-height: 1.6; max-width: 340px; text-align: center; margin-top: -20px; margin-bottom: 24px; }
@@ -814,8 +837,18 @@
       <div class="library-sub" id="libSub">Pick up where you left off, or explore your shelf.</div>
 
       <div class="lib-tabs">
-        <button class="lib-tab active" id="tabBooks" onclick="switchLibTab('books')">Books</button>
-        <button class="lib-tab" id="tabPodcasts" onclick="switchLibTab('podcasts')">Podcasts</button>
+        <div class="lib-tabs-left">
+          <button class="lib-tab active" id="tabBooks" onclick="switchLibTab('books')">Books</button>
+          <button class="lib-tab" id="tabPodcasts" onclick="switchLibTab('podcasts')">Podcasts</button>
+        </div>
+        <div class="layout-toggle">
+          <button class="layout-toggle-btn active" id="gridViewBtn" title="Grid view" onclick="setLibraryLayout('grid')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          </button>
+          <button class="layout-toggle-btn" id="listViewBtn" title="List view" onclick="setLibraryLayout('list')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+        </div>
       </div>
 
       <div id="booksTabContent">
@@ -1096,6 +1129,7 @@ async function loadEverything() {
   renderPodcastShelf();
   renderNotifications();
   document.getElementById('bellDot').classList.toggle('show', NOTIFICATIONS.some(n => !n.read));
+  setLibraryLayout(libraryLayout);
 }
 
 /* ============ Rendering the library shelves ============ */
@@ -1424,6 +1458,17 @@ function switchLibTab(tab) {
   document.getElementById('podcastsTabContent').style.display = isBooks ? 'none' : 'block';
 }
 
+let libraryLayout = 'grid';
+try { libraryLayout = localStorage.getItem('kl_library_layout') || 'grid'; } catch (e) {}
+
+function setLibraryLayout(mode) {
+  libraryLayout = mode;
+  try { localStorage.setItem('kl_library_layout', mode); } catch (e) {}
+  document.getElementById('gridViewBtn').classList.toggle('active', mode === 'grid');
+  document.getElementById('listViewBtn').classList.toggle('active', mode === 'list');
+  document.querySelectorAll('.shelf').forEach(s => s.classList.toggle('list-view', mode === 'list'));
+}
+
 function formatTime(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
@@ -1436,14 +1481,16 @@ function podcastCardHTML(pod) {
     : `background:${pod.coverColor}`;
   return `
     <div class="podcast-card${pod.owned ? '' : ' locked'}" data-id="${pod.id}">
-      <div class="podcast-cover" style="${coverStyle}">
+      <div class="podcast-cover${pod.coverImage ? ' has-image' : ''}" style="${coverStyle}">
         ${pod.owned ? '' : `<div class="lock-badge">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F0C25E" stroke-width="2.4"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
         </div>`}
       </div>
-      <div class="podcast-meta-name">${pod.title}</div>
-      <div class="podcast-meta-host">${pod.host}</div>
-      <div class="podcast-duration">${pod.hasAudio ? formatTime(pod.duration) : 'No audio yet'} · ${pod.lang}</div>
+      <div class="podcast-meta">
+        <div class="podcast-meta-name">${pod.title}</div>
+        <div class="podcast-meta-host">${pod.host}</div>
+        <div class="podcast-duration">${pod.hasAudio ? formatTime(pod.duration) : 'No audio yet'} · ${pod.lang}</div>
+      </div>
     </div>
   `;
 }
@@ -1482,7 +1529,14 @@ async function openPodcast(id) {
   currentPodcast = PODCASTS.find(p => p.id === id);
   podcastSpeed = 1;
   document.getElementById('podcastSpeedBtn').textContent = '1x speed';
-  document.getElementById('podcastArt').style.background = currentPodcast.coverColor;
+  const artEl = document.getElementById('podcastArt');
+  if (currentPodcast.coverImage) {
+    artEl.style.cssText = `background-image:url('${currentPodcast.coverImage}');background-size:cover;background-position:center;`;
+    artEl.classList.add('has-image');
+  } else {
+    artEl.style.cssText = `background:${currentPodcast.coverColor};`;
+    artEl.classList.remove('has-image');
+  }
   document.getElementById('podcastTitleEl').textContent = currentPodcast.title;
   document.getElementById('podcastHostEl').textContent = currentPodcast.host;
   const descEl = document.getElementById('podcastDescEl');
