@@ -120,5 +120,7 @@ the three front ends.
       (see "Resend sandbox limitation")
 - [x] Public website (`site/index.html`) wired to real Supabase catalog — Buy Now
       opens a pre-filled email to malviyadheerajkumar@gmail.com (no payment gateway in v1)
+- [x] GitHub repo created and pushed (`actonword/kings-library`), GitHub Pages live at
+      https://actonword.github.io/kings-library/ (site/app/admin all verified responding)
 - [ ] Verify a domain in Resend so OTP/notification email reaches real reader addresses
-- [ ] GitHub repo created and pushed, GitHub Pages enabled
+      (currently only the Resend account's own email can receive real mail)
