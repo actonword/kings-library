@@ -1468,7 +1468,15 @@ function renderPodcastShelf() {
 let currentPodcast = null;
 let podcastPlaying = false;
 let podcastSpeed = 1;
+let podcastUnlocking = false; // true while the silent unlock clip is playing — see openPodcast()
 const podcastAudioEl = document.getElementById('podcastAudioEl');
+
+// A real (if silent) ~50ms WAV clip. iOS Safari only "unlocks" an <audio> element for
+// later programmatic play() once it has genuinely started playing during a real user
+// gesture — an empty/missing src never actually plays, so it doesn't count. Playing
+// this tiny clip synchronously in the tap, then swapping to the real URL once the
+// async fetch below resolves, is the standard fix for this exact restriction.
+const SILENT_AUDIO_URI = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
 
 async function openPodcast(id) {
   currentPodcast = PODCASTS.find(p => p.id === id);
@@ -1485,25 +1493,23 @@ async function openPodcast(id) {
   podcastAudioEl.pause();
   podcastAudioEl.currentTime = 0;
   podcastAudioEl.playbackRate = 1;
-  podcastAudioEl.removeAttribute('src');
-
-  // Mobile browsers (iOS Safari especially) only allow play() to produce sound when
-  // it's tied to the user gesture that triggered it. Calling play() here — before the
-  // async fetch below — happens synchronously within the tap, which "unlocks" this
-  // audio element so the real play() call after the fetch is allowed to make sound.
   podcastAudioEl.muted = false;
-  const primeAttempt = podcastAudioEl.play();
-  if (primeAttempt && typeof primeAttempt.catch === 'function') primeAttempt.catch(() => {});
-  podcastAudioEl.pause();
+  podcastUnlocking = true;
+  podcastAudioEl.src = SILENT_AUDIO_URI;
+  const unlockAttempt = podcastAudioEl.play();
+  if (unlockAttempt && typeof unlockAttempt.catch === 'function') unlockAttempt.catch(() => {});
 
   document.getElementById('libraryView').style.display = 'none';
   document.getElementById('podcastView').classList.add('active');
 
   const { data, error } = await sb.functions.invoke('get-podcast-audio-url', { body: { podcastId: id } });
+  podcastUnlocking = false;
   if (error || data?.error) {
     showToast('Could not load audio: ' + (data?.error || error.message));
     return;
   }
+  podcastAudioEl.pause();
+  podcastAudioEl.currentTime = 0;
   podcastAudioEl.src = data.url;
   playPodcast();
 }
@@ -1534,9 +1540,13 @@ function pausePodcast() {
   podcastAudioEl.pause();
 }
 
-podcastAudioEl.addEventListener('timeupdate', () => { if (podcastPlaying) updatePodcastProgress(); });
-podcastAudioEl.addEventListener('loadedmetadata', updatePodcastProgress);
-podcastAudioEl.addEventListener('ended', () => { pausePodcast(); showToast("Episode finished."); });
+podcastAudioEl.addEventListener('timeupdate', () => { if (podcastPlaying && !podcastUnlocking) updatePodcastProgress(); });
+podcastAudioEl.addEventListener('loadedmetadata', () => { if (!podcastUnlocking) updatePodcastProgress(); });
+podcastAudioEl.addEventListener('ended', () => {
+  if (podcastUnlocking) return; // the silent unlock clip ending — not a real episode finishing
+  pausePodcast();
+  showToast("Episode finished.");
+});
 
 document.getElementById('podcastPlayBtn').addEventListener('click', () => {
   podcastPlaying ? pausePodcast() : playPodcast();
