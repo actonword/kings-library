@@ -114,9 +114,10 @@ the three front ends.
 - [x] Admin account created (`actonword@gmail.com`, `role='admin'`)
 - [x] Edge Functions deployed + `RESEND_API_KEY` secret set
 - [x] Admin panel (`admin/index.html`) wired to real Supabase — tested, working
-- [x] Reader app (`app/index.html`) wired to real Supabase — OTP sign-in confirmed
-      working end-to-end for the Resend account's own email; other recipients blocked
-      until a domain is verified (see "Resend sandbox limitation")
+- [x] Reader app (`app/index.html`) wired to real Supabase — full flow confirmed
+      working end-to-end (grant → email → OTP → library → open/read a book) for the
+      Resend account's own email; other recipients blocked until a domain is verified
+      (see "Resend sandbox limitation")
 - [ ] Verify a domain in Resend so OTP/notification email reaches real reader addresses
 - [ ] `site/index.html` (public website) — not wired yet, no payment gateway in v1
 - [ ] GitHub repo created and pushed, GitHub Pages enabled
