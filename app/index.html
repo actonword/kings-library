@@ -372,6 +372,7 @@
 
   .lib-tabs { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 26px; }
   .lib-tabs-left { display: flex; gap: 8px; }
+  .lib-tabs-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .lib-tab {
     background: none; border: 1px solid rgba(233,226,208,0.12); color: var(--text-on-ink-dim);
     padding: 8px 18px; border-radius: 20px; font-size: 13px; font-family: var(--sans); cursor: pointer;
@@ -743,12 +744,13 @@
     }
     .topbar-right > * { flex-shrink: 0; }
     .search-box { display: none; }
-    .lang-select-wrap { max-width: 68px; }
-    .lang-select { font-size: 11px; padding: 7px 20px 7px 8px; }
     .theme-toggle-btn { width: 30px; height: 30px; }
 
     .notif-panel { width: min(280px, 88vw); right: -8px; }
     .account-panel { width: min(240px, 88vw); right: -8px; }
+
+    .lang-select-wrap { max-width: 92px; }
+    .lang-select { font-size: 11px; padding: 7px 22px 7px 8px; }
 
     .library { padding: 16px 12px 40px; }
     .library-heading { font-size: 18px; margin-bottom: 2px; }
@@ -794,12 +796,6 @@
     .login-title { font-size: 19px; }
     .login-input { font-size: 16px; }
     .search-box input { font-size: 16px; }
-  }
-
-  @media (max-width: 480px) {
-    .brand-text { display: none; }
-    .topbar-right { gap: 4px; }
-    .lang-select-wrap { max-width: 56px; }
   }
 
   @media (max-width: 380px) {
@@ -853,11 +849,6 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input type="text" placeholder="Search your library" id="searchInput">
         </div>
-        <div class="lang-select-wrap">
-          <select id="langSelect" class="lang-select">
-            <option value="all">Language</option>
-          </select>
-        </div>
         <button id="uiLangBtn" class="theme-toggle-btn uiLangBtn" title="Interface language">EN</button>
         <button id="appThemeToggle" class="theme-toggle-btn" title="Switch light/dark mode">
           <svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
@@ -897,13 +888,20 @@
           <button class="lib-tab active" id="tabBooks" onclick="switchLibTab('books')">Books</button>
           <button class="lib-tab" id="tabPodcasts" onclick="switchLibTab('podcasts')">Podcasts</button>
         </div>
-        <div class="layout-toggle">
-          <button class="layout-toggle-btn active" id="gridViewBtn" title="Grid view" onclick="setLibraryLayout('grid')">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-          </button>
-          <button class="layout-toggle-btn" id="listViewBtn" title="List view" onclick="setLibraryLayout('list')">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-          </button>
+        <div class="lib-tabs-right">
+          <div class="lang-select-wrap">
+            <select id="langSelect" class="lang-select">
+              <option value="all">Language</option>
+            </select>
+          </div>
+          <div class="layout-toggle">
+            <button class="layout-toggle-btn active" id="gridViewBtn" title="Grid view" onclick="setLibraryLayout('grid')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </button>
+            <button class="layout-toggle-btn" id="listViewBtn" title="List view" onclick="setLibraryLayout('list')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+          </div>
         </div>
       </div>
 
