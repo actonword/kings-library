@@ -843,15 +843,20 @@ async function updatePrice(id, val) {
 
 async function deleteBook(id) {
   const book = BOOKS.find(b => b.id === id);
-  if (!confirm(`Remove "${book?.title}" from the library? This can't be undone.`)) return;
+  const { count } = await sb.from('access_grants').select('id', { count: 'exact', head: true }).eq('item_type', 'book').eq('item_id', id);
+  const warning = count ? ` This will revoke access for ${count} reader${count === 1 ? '' : 's'} who currently own it.` : '';
+  if (!confirm(`Remove "${book?.title}" from the library?${warning} This can't be undone.`)) return;
+  await sb.from('access_grants').delete().eq('item_type', 'book').eq('item_id', id);
   const { error } = await sb.from('books').delete().eq('id', id);
   if (error) { showToast('Could not remove book: ' + error.message); return; }
   await loadBooks();
+  await loadReaders();
   renderBooksTable();
   renderGrantBookChecks();
+  renderReadersTable();
   renderDashboard();
   renderNotifBookOptions();
-  showToast(`"${book?.title}" removed from the library.`);
+  showToast(`"${book?.title}" removed from the library${count ? ` and access revoked for ${count} reader${count === 1 ? '' : 's'}` : ''}.`);
 }
 
 async function uploadCoverImage(idPrefix, file) {
@@ -964,14 +969,19 @@ async function updatePodPrice(id, val) {
 
 async function deletePodcast(id) {
   const pod = PODCASTS.find(p => p.id === id);
-  if (!confirm(`Remove "${pod?.title}" from Podcasts? This can't be undone.`)) return;
+  const { count } = await sb.from('access_grants').select('id', { count: 'exact', head: true }).eq('item_type', 'podcast').eq('item_id', id);
+  const warning = count ? ` This will revoke access for ${count} reader${count === 1 ? '' : 's'} who currently own it.` : '';
+  if (!confirm(`Remove "${pod?.title}" from Podcasts?${warning} This can't be undone.`)) return;
+  await sb.from('access_grants').delete().eq('item_type', 'podcast').eq('item_id', id);
   const { error } = await sb.from('podcasts').delete().eq('id', id);
   if (error) { showToast('Could not remove podcast: ' + error.message); return; }
   await loadPodcasts();
+  await loadReaders();
   renderPodcastsTable();
   renderGrantPodChecks();
+  renderReadersTable();
   renderDashboard();
-  showToast(`"${pod?.title}" removed from Podcasts.`);
+  showToast(`"${pod?.title}" removed from Podcasts${count ? ` and access revoked for ${count} reader${count === 1 ? '' : 's'}` : ''}.`);
 }
 
 async function uploadPodcastAudio(podcastId, file) {
