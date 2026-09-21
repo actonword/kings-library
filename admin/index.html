@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,500;0,7..72,600;0,7..72,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/supabaseClient.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   .login-view { height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
   .login-card { width: 100%; max-width: 340px; text-align: center; }
@@ -354,7 +355,7 @@
             </div>
           </div>
           <div class="form-field full">
-            <label>Book file for your own reference only (EPUB, Word, or PDF) — this is NOT read by the system</label>
+            <label>Upload the book file — EPUB chapters are read automatically; Word/PDF are not yet</label>
             <div class="upload-box" id="uploadBox">
               <input type="file" id="bookFileInput" accept=".epub,.docx,.pdf" style="display:none;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
@@ -362,7 +363,7 @@
             </div>
             <div id="uploadStatus" class="upload-status"></div>
           </div>
-          <div class="form-field full"><label>Chapter 1 text — REQUIRED for the book to be readable. Paste the full chapter, not just a sample.</label><textarea id="newBookContent" placeholder="Paste or type the full text of the first chapter here..."></textarea></div>
+          <div class="form-field full"><label>Chapter 1 text — only needed if you didn't upload an EPUB above (Word/PDF/manual entry)</label><textarea id="newBookContent" placeholder="Paste or type the full text of the first chapter here..."></textarea></div>
         </div>
         <div id="addBookError" style="display:none; color:var(--red); font-weight:600; font-size:12.5px; background:rgba(196,87,74,0.1); border:1px solid rgba(196,87,74,0.3); border-radius:6px; padding:10px 12px; margin-bottom:12px;"></div>
         <button class="btn btn-gold" onclick="addBook()">Add Book</button>
@@ -1002,8 +1003,9 @@ async function addBook() {
     errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
-  if (!contentText) {
-    if (!confirm("You haven't pasted any chapter text. This book will be added but will show as EMPTY to readers — they won't be able to read anything. Add it anyway and paste the text later?")) {
+  const hasEpubChapters = pendingEpubChapters && pendingEpubChapters.length > 0;
+  if (!contentText && !hasEpubChapters) {
+    if (!confirm("You haven't pasted any chapter text (and no EPUB was successfully read). This book will be added but will show as EMPTY to readers — they won't be able to read anything. Add it anyway and paste the text later?")) {
       errorBox.style.display = 'block';
       errorBox.textContent = 'Not added — paste the chapter text first, or confirm the empty-book warning.';
       return;
@@ -1030,9 +1032,15 @@ async function addBook() {
   });
   if (error) { showToast('Could not add book: ' + error.message); return; }
 
-  if (contentText) {
+  const epubChapterCount = hasEpubChapters ? pendingEpubChapters.length : 0;
+  if (hasEpubChapters) {
+    const rows = pendingEpubChapters.map((c, i) => ({ book_id: id, position: i + 1, label: c.label, title: null, content: c.content }));
+    const { error: chError } = await sb.from('chapters').insert(rows);
+    if (chError) showToast('Book added, but chapters failed to save: ' + chError.message);
+  } else if (contentText) {
     await sb.from('chapters').insert({ book_id: id, position: 1, label: 'Chapter One', title: null, content: contentText });
   }
+  pendingEpubChapters = null;
 
   document.getElementById('newBookTitle').value = '';
   document.getElementById('newBookAuthor').value = '';
@@ -1043,7 +1051,9 @@ async function addBook() {
   bookFileInput.value = '';
   uploadBox.classList.remove('has-file');
   document.getElementById('uploadBoxText').textContent = 'Click to choose a file — .epub, .docx, or .pdf';
-  document.getElementById('uploadStatus').innerHTML = '';
+  const uploadStatusEl = document.getElementById('uploadStatus');
+  uploadStatusEl.innerHTML = '';
+  uploadStatusEl.style.color = '';
   bookImageInput.value = '';
   bookImageUploadBox.classList.remove('has-file');
   document.getElementById('bookImagePreview').style.display = 'none';
@@ -1055,7 +1065,9 @@ async function addBook() {
   renderGrantBookChecks();
   renderDashboard();
   renderNotifBookOptions();
-  showToast(`"${title}" added to King's Library.`);
+  showToast(epubChapterCount
+    ? `"${title}" added with ${epubChapterCount} chapter${epubChapterCount === 1 ? '' : 's'} from the EPUB.`
+    : `"${title}" added to King's Library.`);
 }
 
 /* ---------- Podcasts ---------- */
@@ -1335,17 +1347,96 @@ bookImageInput.addEventListener('change', () => {
   reader.readAsDataURL(file);
 });
 
-bookFileInput.addEventListener('change', () => {
+let pendingEpubChapters = null;
+
+function htmlDocToPlainText(doc) {
+  doc.querySelectorAll('script, style').forEach(el => el.remove());
+  doc.querySelectorAll('br').forEach(el => el.replaceWith('\n'));
+  doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, section, blockquote').forEach(el => {
+    el.appendChild(doc.createTextNode('\n\n'));
+  });
+  const raw = doc.body ? doc.body.textContent : (doc.documentElement ? doc.documentElement.textContent : '');
+  return (raw || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function resolveZipPath(zip, path) {
+  const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '');
+  if (zip.file(normalized)) return zip.file(normalized);
+  const lower = normalized.toLowerCase();
+  const match = Object.keys(zip.files).find(k => k.toLowerCase() === lower);
+  return match ? zip.file(match) : null;
+}
+
+async function parseEpubFile(file) {
+  const zip = await JSZip.loadAsync(file);
+  const containerEntry = resolveZipPath(zip, 'META-INF/container.xml');
+  if (!containerEntry) throw new Error('not a valid EPUB (missing container.xml)');
+  const containerXml = await containerEntry.async('text');
+  const containerDoc = new DOMParser().parseFromString(containerXml, 'application/xml');
+  const opfPath = containerDoc.querySelector('rootfile')?.getAttribute('full-path');
+  if (!opfPath) throw new Error('could not find the book\'s content file');
+  const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+  const opfEntry = resolveZipPath(zip, opfPath);
+  if (!opfEntry) throw new Error('content file listed but missing from the EPUB');
+  const opfXml = await opfEntry.async('text');
+  const opfDoc = new DOMParser().parseFromString(opfXml, 'application/xml');
+
+  const manifest = {};
+  opfDoc.querySelectorAll('manifest > item').forEach(item => {
+    manifest[item.getAttribute('id')] = item.getAttribute('href');
+  });
+  const spineIds = Array.from(opfDoc.querySelectorAll('spine > itemref')).map(el => el.getAttribute('idref'));
+  if (!spineIds.length) throw new Error('this EPUB has no chapters listed');
+
+  const chapters = [];
+  for (const id of spineIds) {
+    const href = manifest[id];
+    if (!href) continue;
+    const entry = resolveZipPath(zip, opfDir + decodeURIComponent(href));
+    if (!entry) continue;
+    const html = await entry.async('text');
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const text = htmlDocToPlainText(doc);
+    if (!text || text.length < 20) continue; // skip cover/blank pages
+    const heading = doc.querySelector('h1, h2, h3, title');
+    const label = heading ? heading.textContent.trim().slice(0, 80) : `Chapter ${chapters.length + 1}`;
+    chapters.push({ label, content: text });
+  }
+  return chapters;
+}
+
+bookFileInput.addEventListener('change', async () => {
   const file = bookFileInput.files[0];
   const statusEl = document.getElementById('uploadStatus');
+  pendingEpubChapters = null;
+  statusEl.style.color = '';
   if (!file) return;
   const ext = file.name.split('.').pop().toLowerCase();
   const formatNames = { epub: 'EPUB', docx: 'Word Document', pdf: 'PDF' };
   const formatLabel = formatNames[ext] || ext.toUpperCase();
   uploadBox.classList.add('has-file');
   document.getElementById('uploadBoxText').textContent = file.name;
-  statusEl.className = 'upload-status warn';
-  statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> This file is NOT uploaded or read — this box only remembers the filename. You must paste the full book text into the box below, or nothing will be readable.`;
+
+  if (ext === 'epub') {
+    statusEl.className = 'upload-status';
+    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Reading chapters from the file…`;
+    try {
+      const chapters = await parseEpubFile(file);
+      if (!chapters.length) throw new Error('no readable chapters found');
+      pendingEpubChapters = chapters;
+      const totalChars = chapters.reduce((sum, c) => sum + c.content.length, 0);
+      statusEl.className = 'upload-status';
+      statusEl.style.color = 'var(--green)';
+      statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Found ${chapters.length} chapter${chapters.length === 1 ? '' : 's'} (${totalChars.toLocaleString()} characters total) — these will be added automatically. Review them afterward with the "Content" button. The box below is optional now.`;
+    } catch (e) {
+      pendingEpubChapters = null;
+      statusEl.className = 'upload-status warn';
+      statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Couldn't read this EPUB automatically (${e.message}). Paste the chapter text into the box below instead.`;
+    }
+  } else {
+    statusEl.className = 'upload-status warn';
+    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Automatic text extraction for ${formatLabel} files isn't built yet. Paste the full book text into the box below.`;
+  }
 });
 
 const podUploadBox = document.getElementById('podUploadBox');
