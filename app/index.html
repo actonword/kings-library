@@ -171,6 +171,18 @@
     cursor: pointer;
   }
   .theme-toggle-btn:hover { border-color: rgba(212,175,106,0.4); }
+  .signout-btn {
+    display: flex; align-items: center; gap: 6px;
+    height: 32px; padding: 0 12px;
+    background: var(--ink-soft);
+    border: 1px solid rgba(196,87,74,0.35);
+    border-radius: var(--radius);
+    color: #C4574A;
+    cursor: pointer;
+    font-family: var(--sans); font-size: 12.5px; font-weight: 500;
+    flex-shrink: 0;
+  }
+  .signout-btn:hover { border-color: #C4574A; background: rgba(196,87,74,0.08); }
 
   .ui-lang-switch { margin-bottom: 18px; }
   .ui-lang-pill {
@@ -712,6 +724,8 @@
     .lang-select { font-size: 12px; padding: 7px 26px 7px 10px; }
     .reader-name { display: none; }
     .theme-toggle-btn { width: 30px; height: 30px; }
+    .signout-btn { padding: 0 8px; }
+    .signout-btn-label { display: none; }
 
     .notif-panel { width: min(280px, 88vw); right: -8px; }
 
@@ -833,8 +847,9 @@
           </div>
         </div>
         <div class="reader-name"><span id="readingAsLabel">Reading as</span> <strong id="readerNameStrong">Guest Reader</strong></div>
-        <button id="signOutBtn" class="theme-toggle-btn" title="Sign out">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+        <button id="signOutBtn" class="signout-btn" title="Sign out">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+          <span class="signout-btn-label" id="signOutLabel">Sign Out</span>
         </button>
       </div>
     </div>
@@ -1666,7 +1681,8 @@ const UI_STRINGS = {
     nowPlaying: "Now Playing",
     privacyShieldText: "This book is only viewable inside King's Library. Content is hidden while the window is out of focus.",
     noBooksFound: "No books found for this language or search.",
-    noPodcastsForLanguage: "No podcasts found for this language."
+    noPodcastsForLanguage: "No podcasts found for this language.",
+    signOut: "Sign Out"
   },
   hi: {
     code: "हिं",
@@ -1692,7 +1708,8 @@ const UI_STRINGS = {
     nowPlaying: "अभी चल रहा है",
     privacyShieldText: "यह किताब केवल किंग्स लाइब्रेरी के अंदर देखी जा सकती है। विंडो फोकस से बाहर होने पर सामग्री छिप जाती है।",
     noBooksFound: "इस भाषा या खोज के लिए कोई किताब नहीं मिली।",
-    noPodcastsForLanguage: "इस भाषा के लिए कोई पॉडकास्ट नहीं मिला।"
+    noPodcastsForLanguage: "इस भाषा के लिए कोई पॉडकास्ट नहीं मिला।",
+    signOut: "साइन आउट"
   },
   pa: {
     code: "ਪੰ",
@@ -1718,7 +1735,8 @@ const UI_STRINGS = {
     nowPlaying: "ਹੁਣ ਚੱਲ ਰਿਹਾ ਹੈ",
     privacyShieldText: "ਇਹ ਕਿਤਾਬ ਸਿਰਫ਼ ਕਿੰਗਜ਼ ਲਾਇਬ੍ਰੇਰੀ ਦੇ ਅੰਦਰ ਹੀ ਦੇਖੀ ਜਾ ਸਕਦੀ ਹੈ। ਵਿੰਡੋ ਫੋਕਸ ਤੋਂ ਬਾਹਰ ਹੋਣ 'ਤੇ ਸਮੱਗਰੀ ਲੁਕ ਜਾਂਦੀ ਹੈ।",
     noBooksFound: "ਇਸ ਭਾਸ਼ਾ ਜਾਂ ਖੋਜ ਲਈ ਕੋਈ ਕਿਤਾਬ ਨਹੀਂ ਮਿਲੀ।",
-    noPodcastsForLanguage: "ਇਸ ਭਾਸ਼ਾ ਲਈ ਕੋਈ ਪੌਡਕਾਸਟ ਨਹੀਂ ਮਿਲਿਆ।"
+    noPodcastsForLanguage: "ਇਸ ਭਾਸ਼ਾ ਲਈ ਕੋਈ ਪੌਡਕਾਸਟ ਨਹੀਂ ਮਿਲਿਆ।",
+    signOut: "ਸਾਈਨ ਆਊਟ"
   }
 };
 
@@ -1762,6 +1780,7 @@ function applyTranslations() {
   setText('themeLabel', s.theme);
   setText('podcastNowPlayingLabel', s.nowPlaying);
   setText('privacyShieldTextEl', s.privacyShieldText);
+  setText('signOutLabel', s.signOut);
 
   renderLibrary();
   renderPodcastShelf();
