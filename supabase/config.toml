@@ -158,11 +158,16 @@ enabled = true
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "https://actonword.github.io/kings-library/app/"
+site_url = "https://kingslibrary.online/app/"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
+# Kept the old actonword.github.io URLs too so nothing breaks if the custom domain's
+# HTTPS cert isn't finished provisioning yet, or as a fallback if DNS ever changes.
 additional_redirect_urls = [
+  "https://kingslibrary.online/site/",
+  "https://kingslibrary.online/app/",
+  "https://kingslibrary.online/admin/",
   "https://actonword.github.io/kings-library/site/",
   "https://actonword.github.io/kings-library/app/",
   "https://actonword.github.io/kings-library/admin/"

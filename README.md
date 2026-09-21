@@ -46,8 +46,9 @@ _original-mockups/   the original static demo files, kept for reference
    `enable_signup = false`, the Resend SMTP block, and a custom `magic_link` template
    (`supabase/templates/magic_link.html`) that shows the raw `{{ .Token }}` code — the
    app calls `supabase.auth.verifyOtp({ email, token, type: 'email' })` with it.
-   `site_url`/`additional_redirect_urls` are already set to the real GitHub Pages URLs
-   (`https://actonword.github.io/kings-library/{site,app,admin}/`).
+   `site_url`/`additional_redirect_urls` are set to `https://kingslibrary.online/{site,app,admin}/`
+   (the old `https://actonword.github.io/kings-library/{site,app,admin}/` URLs are kept
+   as a fallback in `additional_redirect_urls`).
 6. **Create your admin account.** Authentication → Users → Add user (email + password).
    Copy the new user's UUID, then in the SQL Editor run:
    ```sql
@@ -88,24 +89,21 @@ false — even for existing users with `shouldCreateUser: false`. There is no wa
 `enable_signup` is therefore left `true` intentionally (see "v1 model" above);
 don't set it back to false, it will silently break every reader's sign-in.
 
-## Resend sandbox limitation
+## Resend domain (resolved)
 
-Without a verified sending domain in Resend, `onboarding@resend.dev` can only deliver
-to the email address the Resend account itself is registered under — sending to any
-other recipient fails with a GoTrue `500 Error sending magic link email`. Until a
-domain is verified:
-- Only the Resend account's own email can receive real OTP/notification mail for testing.
-- Grant access to that address specifically when testing end-to-end delivery.
-- Once a domain is verified, update `admin_email` in `supabase/config.toml`'s
-  `[auth.email.smtp]` block and the `RESEND_FROM_EMAIL` Edge Function secret to an
-  address on that domain, then re-run `supabase secrets set` (Edge Functions) and
-  push the SMTP sender change **via the dashboard**, not `config push` (see landmine above).
+`kingslibrary.online` is verified in Resend as of 2026-09-21. `RESEND_FROM_EMAIL` is
+set to `King's Library <hello@kingslibrary.online>` (applies to the custom emails sent
+by `grant-access`/`send-notification`). The OTP/magic-link sender (`admin_email` in
+Supabase's SMTP settings) still needs updating to the same address — **do this via the
+dashboard**, not `config push` (see landmine above), since it's the exact setting that
+trips the email-provider-reset bug.
 
 ## Hosting
 
-GitHub repo: `actonword/kings-library` → GitHub Pages at
-`https://actonword.github.io/kings-library/`, with `/site/`, `/app/`, `/admin/` as
-the three front ends.
+GitHub repo: `actonword/kings-library` → GitHub Pages, custom domain `kingslibrary.online`
+(DNS live via 4 A records at Hostinger; HTTPS cert was still provisioning as of
+2026-09-21 — until then `actonword.github.io/kings-library/` is the safe fallback URL
+to hand out). `/site/`, `/app/`, `/admin/` are the three front ends either way.
 
 ## Status
 
@@ -120,7 +118,11 @@ the three front ends.
       (see "Resend sandbox limitation")
 - [x] Public website (`site/index.html`) wired to real Supabase catalog — Buy Now
       opens a pre-filled email to malviyadheerajkumar@gmail.com (no payment gateway in v1)
-- [x] GitHub repo created and pushed (`actonword/kings-library`), GitHub Pages live at
-      https://actonword.github.io/kings-library/ (site/app/admin all verified responding)
-- [ ] Verify a domain in Resend so OTP/notification email reaches real reader addresses
-      (currently only the Resend account's own email can receive real mail)
+- [x] GitHub repo created and pushed (`actonword/kings-library`), GitHub Pages live
+- [x] Custom domain `kingslibrary.online` — DNS live at Hostinger, HTTPS provisioning
+- [x] Domain verified in Resend; `RESEND_FROM_EMAIL` updated to hello@kingslibrary.online
+- [ ] Update OTP sender (`admin_email`) to hello@kingslibrary.online in the Supabase
+      dashboard's SMTP settings (not yet done — do this via dashboard, not config push)
+- [ ] Once HTTPS is confirmed live on kingslibrary.online: update Site URL/Redirect URLs
+      in the dashboard, redeploy Edge Functions so APP_URL picks up the new domain, and
+      switch reader-facing links (grant emails, PWA) over from actonword.github.io

@@ -1,6 +1,6 @@
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
-const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "King's Library <onboarding@resend.dev>";
-export const APP_URL = Deno.env.get("APP_URL") ?? "https://actonword.github.io/kings-library/app/";
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "King's Library <hello@kingslibrary.online>";
+export const APP_URL = Deno.env.get("APP_URL") ?? "https://kingslibrary.online/app/";
 
 export async function sendEmail(to: string, subject: string, html: string) {
   const res = await fetch("https://api.resend.com/emails", {
