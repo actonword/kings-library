@@ -580,7 +580,7 @@
     justify-content: center;
     position: relative;
     overflow: hidden;
-    touch-action: none;
+    touch-action: pan-y;
   }
   .page-wrap {
     width: min(640px, 88vw);
@@ -589,7 +589,8 @@
   }
   .page-content {
     height: 100%;
-    overflow: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 8px 6px;
     position: relative;
   }
