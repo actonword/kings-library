@@ -364,6 +364,7 @@
           </div>
           <div class="form-field full"><label>Chapter 1 text — REQUIRED for the book to be readable. Paste the full chapter, not just a sample.</label><textarea id="newBookContent" placeholder="Paste or type the full text of the first chapter here..."></textarea></div>
         </div>
+        <div id="addBookError" style="display:none; color:var(--red); font-weight:600; font-size:12.5px; background:rgba(196,87,74,0.1); border:1px solid rgba(196,87,74,0.3); border-radius:6px; padding:10px 12px; margin-bottom:12px;"></div>
         <button class="btn btn-gold" onclick="addBook()">Add Book</button>
       </div>
 
@@ -986,11 +987,29 @@ async function addBook() {
   const priceVal = document.getElementById('newBookPrice').value;
   const description = document.getElementById('newBookDescription').value.trim();
   const contentText = document.getElementById('newBookContent').value.trim();
+  const errorBox = document.getElementById('addBookError');
 
-  if (!title || !author || !lang) {
-    showToast('Please fill in at least Title, Author, and Language.');
+  const missing = [];
+  if (!title) missing.push('Title');
+  if (!author) missing.push('Author');
+  if (!lang) missing.push('Language');
+  ['newBookTitle', 'newBookAuthor', 'newBookLang'].forEach((fid, i) => {
+    document.getElementById(fid).style.borderColor = missing.includes(['Title','Author','Language'][i]) ? 'var(--red)' : '';
+  });
+  if (missing.length) {
+    errorBox.style.display = 'block';
+    errorBox.textContent = `Book was NOT added — missing: ${missing.join(', ')}.`;
+    errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
+  if (!contentText) {
+    if (!confirm("You haven't pasted any chapter text. This book will be added but will show as EMPTY to readers — they won't be able to read anything. Add it anyway and paste the text later?")) {
+      errorBox.style.display = 'block';
+      errorBox.textContent = 'Not added — paste the chapter text first, or confirm the empty-book warning.';
+      return;
+    }
+  }
+  errorBox.style.display = 'none';
 
   const id = crypto.randomUUID();
   let coverImageUrl = null;
