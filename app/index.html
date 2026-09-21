@@ -52,8 +52,13 @@
   body.light-app .topbar {
     border-bottom-color: rgba(36,30,20,0.08);
   }
-  body.light-app .reader-name {
-    border-left-color: rgba(36,30,20,0.12);
+  body.light-app .notif-panel,
+  body.light-app .account-panel {
+    background: #FFFDF6;
+    border-color: rgba(36,30,20,0.12);
+  }
+  body.light-app .account-panel-name {
+    border-bottom-color: rgba(36,30,20,0.08);
   }
   body.light-app .book-name { color: var(--text-on-ink); }
   body.light-app .lang-select-wrap::after {
@@ -171,18 +176,6 @@
     cursor: pointer;
   }
   .theme-toggle-btn:hover { border-color: rgba(212,175,106,0.4); }
-  .signout-btn {
-    display: flex; align-items: center; gap: 6px;
-    height: 32px; padding: 0 12px;
-    background: var(--ink-soft);
-    border: 1px solid rgba(196,87,74,0.35);
-    border-radius: var(--radius);
-    color: #C4574A;
-    cursor: pointer;
-    font-family: var(--sans); font-size: 12.5px; font-weight: 500;
-    flex-shrink: 0;
-  }
-  .signout-btn:hover { border-color: #C4574A; background: rgba(196,87,74,0.08); }
 
   .ui-lang-switch { margin-bottom: 18px; }
   .ui-lang-pill {
@@ -324,13 +317,38 @@
   .book-card.locked .book-cover { filter: grayscale(0.5) brightness(0.55); }
   .book-card.locked .book-name { color: var(--text-on-ink-dim); }
 
-  .reader-name {
-    font-size: 13px;
-    color: var(--text-on-ink-dim);
-    padding-left: 16px;
-    border-left: 1px solid rgba(233,226,208,0.12);
+  .account-wrap { position: relative; }
+  .account-panel {
+    display: none;
+    position: absolute; top: 42px; right: 0;
+    width: 220px;
+    background: var(--ink-soft);
+    border: 1px solid rgba(233,226,208,0.1);
+    border-radius: 8px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+    z-index: 30;
+    overflow: hidden;
   }
-  .reader-name strong { color: var(--text-on-ink); font-weight: 500; }
+  .account-panel.open { display: block; }
+  .account-panel-name {
+    font-size: 12.5px;
+    color: var(--text-on-ink-dim);
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(233,226,208,0.08);
+  }
+  .account-panel-name strong { display: block; color: var(--text-on-ink); font-weight: 600; font-size: 14px; margin-top: 2px; }
+  .account-signout-btn {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%;
+    padding: 13px 16px;
+    background: none;
+    border: none;
+    color: #C4574A;
+    cursor: pointer;
+    font-family: var(--sans); font-size: 13px; font-weight: 500;
+    text-align: left;
+  }
+  .account-signout-btn:hover { background: rgba(196,87,74,0.1); }
 
   /* ---------- Library view ---------- */
   .library {
@@ -723,6 +741,7 @@
       gap: 6px;
       flex: 1;
       min-width: 0;
+      justify-content: flex-end;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
@@ -733,12 +752,10 @@
     .search-box { display: none; }
     .lang-select-wrap { max-width: 74px; }
     .lang-select { font-size: 11px; padding: 7px 22px 7px 8px; }
-    .reader-name { display: none; }
     .theme-toggle-btn { width: 30px; height: 30px; }
-    .signout-btn { padding: 0 8px; }
-    .signout-btn-label { display: none; }
 
     .notif-panel { width: min(280px, 88vw); right: -8px; }
+    .account-panel { width: min(240px, 88vw); right: -8px; }
 
     .library { padding: 16px 12px 40px; }
     .library-heading { font-size: 18px; margin-bottom: 2px; }
@@ -837,10 +854,6 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input type="text" placeholder="Search your library" id="searchInput">
         </div>
-        <button id="signOutBtn" class="signout-btn" title="Sign out">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
-          <span class="signout-btn-label" id="signOutLabel">Sign Out</span>
-        </button>
         <div class="lang-select-wrap">
           <select id="langSelect" class="lang-select">
             <option value="all">Language</option>
@@ -861,7 +874,18 @@
             <div id="notifList"></div>
           </div>
         </div>
-        <div class="reader-name"><span id="readingAsLabel">Reading as</span> <strong id="readerNameStrong">Guest Reader</strong></div>
+        <div class="account-wrap" id="accountWrap">
+          <button id="accountBtn" class="theme-toggle-btn" title="Account">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+          </button>
+          <div class="account-panel" id="accountPanel">
+            <div class="account-panel-name"><span id="readingAsLabel">Reading as</span> <strong id="readerNameStrong">Guest Reader</strong></div>
+            <button id="signOutBtn" class="account-signout-btn" title="Sign out">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+              <span id="signOutLabel">Sign Out</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1474,12 +1498,21 @@ function renderNotifications() {
 
 const bellBtn = document.getElementById('bellBtn');
 const notifPanel = document.getElementById('notifPanel');
+const accountBtn = document.getElementById('accountBtn');
+const accountPanel = document.getElementById('accountPanel');
 bellBtn.addEventListener('click', (e) => {
   e.stopPropagation();
+  accountPanel.classList.remove('open');
   notifPanel.classList.toggle('open');
+});
+accountBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  notifPanel.classList.remove('open');
+  accountPanel.classList.toggle('open');
 });
 document.addEventListener('click', (e) => {
   if (!notifPanel.contains(e.target) && e.target !== bellBtn) notifPanel.classList.remove('open');
+  if (!accountPanel.contains(e.target) && e.target !== accountBtn && !accountBtn.contains(e.target)) accountPanel.classList.remove('open');
 });
 
 /* ============ Podcasts ============ */
