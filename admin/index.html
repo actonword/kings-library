@@ -179,6 +179,31 @@
     display: inline-block; font-size: 10.5px; color: var(--gold-bright);
     border: 1px solid rgba(212,175,106,0.35); border-radius: 20px; padding: 1px 8px; margin-right: 6px;
   }
+  .upload-status.warn {
+    color: var(--red); font-weight: 600;
+    background: rgba(196,87,74,0.1); border: 1px solid rgba(196,87,74,0.3);
+    border-radius: 6px; padding: 8px 10px;
+  }
+
+  .content-modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 200; align-items: center; justify-content: center; padding: 20px;
+  }
+  .content-modal-overlay.open { display: flex; }
+  .content-modal {
+    background: var(--ink-soft); border: 1px solid rgba(233,226,208,0.1);
+    border-radius: 12px; width: min(680px, 100%); max-height: 85vh;
+    overflow-y: auto; padding: 24px;
+  }
+  .content-modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+  .content-modal-head h3 { font-family: var(--serif); font-size: 18px; margin-bottom: 4px; }
+  .content-modal-head p { font-size: 12.5px; color: var(--text-on-ink-dim); }
+  .chapter-item { background: var(--ink-softer); border: 1px solid rgba(233,226,208,0.08); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .chapter-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 10px; }
+  .chapter-item-head strong { font-size: 13px; }
+  .chapter-item-head span { font-size: 11.5px; color: var(--text-on-ink-dim); white-space: nowrap; }
+  .chapter-item textarea { width: 100%; min-height: 140px; font-family: var(--serif); font-size: 13.5px; line-height: 1.5; }
+  .chapter-item-actions { display: flex; gap: 8px; margin-top: 10px; }
 
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--ink-soft); border: 1px solid rgba(212,175,106,0.3); color: var(--text-on-ink); padding: 12px 20px; border-radius: 8px; font-size: 12.5px; opacity: 0; pointer-events: none; transition: all .25s ease; z-index: 100; max-width: 360px; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -329,7 +354,7 @@
             </div>
           </div>
           <div class="form-field full">
-            <label>Upload the book file (EPUB, Word, or PDF)</label>
+            <label>Book file for your own reference only (EPUB, Word, or PDF) — this is NOT read by the system</label>
             <div class="upload-box" id="uploadBox">
               <input type="file" id="bookFileInput" accept=".epub,.docx,.pdf" style="display:none;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
@@ -337,7 +362,7 @@
             </div>
             <div id="uploadStatus" class="upload-status"></div>
           </div>
-          <div class="form-field full"><label>Sample text / first chapter (optional — or fill in automatically from your uploaded file once the backend is connected)</label><textarea id="newBookContent" placeholder="Paste or type the opening of the book..."></textarea></div>
+          <div class="form-field full"><label>Chapter 1 text — REQUIRED for the book to be readable. Paste the full chapter, not just a sample.</label><textarea id="newBookContent" placeholder="Paste or type the full text of the first chapter here..."></textarea></div>
         </div>
         <button class="btn btn-gold" onclick="addBook()">Add Book</button>
       </div>
@@ -348,6 +373,20 @@
           <thead><tr><th>Book</th><th>Language</th><th>Price (₹)</th><th>Actions</th></tr></thead>
           <tbody id="booksTableBody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="content-modal-overlay" id="contentModalOverlay">
+      <div class="content-modal">
+        <div class="content-modal-head">
+          <div>
+            <h3 id="contentModalTitle">Content</h3>
+            <p>This is exactly what a reader sees. Check it, edit it, or add more chapters here.</p>
+          </div>
+          <button class="btn btn-danger-outline btn-tiny" onclick="closeContentModal()">Close</button>
+        </div>
+        <div id="chapterList"></div>
+        <button class="btn btn-gold" onclick="addChapterToCurrentBook()">+ Add Another Chapter</button>
       </div>
     </div>
 
@@ -826,9 +865,81 @@ function renderBooksTable() {
       </td>
       <td><span class="lang-tag">${b.lang}</span></td>
       <td><input type="number" class="price-input" value="${b.price ?? ''}" placeholder="TBD" data-id="${b.id}" onchange="updatePrice('${b.id}', this.value)"></td>
-      <td><button class="btn btn-danger-outline btn-tiny" onclick="deleteBook('${b.id}')">Remove</button></td>
+      <td>
+        <button class="btn btn-gold btn-tiny" onclick="openContentModal('${b.id}')">Content</button>
+        <button class="btn btn-danger-outline btn-tiny" onclick="deleteBook('${b.id}')">Remove</button>
+      </td>
     </tr>
   `).join('');
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+let contentModalBookId = null;
+
+async function openContentModal(bookId) {
+  contentModalBookId = bookId;
+  const book = BOOKS.find(b => b.id === bookId);
+  document.getElementById('contentModalTitle').textContent = `Content — ${book?.title || ''}`;
+  document.getElementById('contentModalOverlay').classList.add('open');
+  await loadAndRenderChapters();
+}
+
+function closeContentModal() {
+  document.getElementById('contentModalOverlay').classList.remove('open');
+  contentModalBookId = null;
+}
+
+async function loadAndRenderChapters() {
+  const list = document.getElementById('chapterList');
+  list.innerHTML = '<p style="color:var(--text-on-ink-dim);font-size:13px;">Loading…</p>';
+  const { data: chapters, error } = await sb.from('chapters').select('*').eq('book_id', contentModalBookId).order('position');
+  if (error) { list.innerHTML = `<p style="color:var(--red);font-size:13px;">Could not load chapters: ${error.message}</p>`; return; }
+  if (!chapters || !chapters.length) {
+    list.innerHTML = `<p style="color:var(--red);font-size:13px;font-weight:600;">This book has NO chapters saved — readers see an empty book. Add one below.</p>`;
+    return;
+  }
+  list.innerHTML = chapters.map(c => `
+    <div class="chapter-item">
+      <div class="chapter-item-head">
+        <strong>Chapter ${c.position}${c.label ? ' — ' + escapeHtml(c.label) : ''}</strong>
+        <span>${(c.content || '').length.toLocaleString()} characters</span>
+      </div>
+      <textarea data-chapter-id="${c.id}">${escapeHtml(c.content || '')}</textarea>
+      <div class="chapter-item-actions">
+        <button class="btn btn-gold btn-tiny" onclick="saveChapter('${c.id}')">Save Changes</button>
+        <button class="btn btn-danger-outline btn-tiny" onclick="deleteChapter('${c.id}')">Delete Chapter</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function saveChapter(chapterId) {
+  const textarea = document.querySelector(`textarea[data-chapter-id="${chapterId}"]`);
+  const content = textarea.value.trim();
+  if (!content) { showToast('Chapter text cannot be empty.'); return; }
+  const { error } = await sb.from('chapters').update({ content }).eq('id', chapterId);
+  if (error) { showToast('Could not save: ' + error.message); return; }
+  showToast('Chapter saved.');
+  await loadAndRenderChapters();
+}
+
+async function deleteChapter(chapterId) {
+  if (!confirm('Delete this chapter? This can\'t be undone.')) return;
+  const { error } = await sb.from('chapters').delete().eq('id', chapterId);
+  if (error) { showToast('Could not delete: ' + error.message); return; }
+  showToast('Chapter deleted.');
+  await loadAndRenderChapters();
+}
+
+async function addChapterToCurrentBook() {
+  const { data: existing } = await sb.from('chapters').select('position').eq('book_id', contentModalBookId).order('position', { ascending: false }).limit(1);
+  const nextPosition = existing && existing.length ? existing[0].position + 1 : 1;
+  const { error } = await sb.from('chapters').insert({ book_id: contentModalBookId, position: nextPosition, label: `Chapter ${nextPosition}`, title: null, content: 'New chapter — click Save Changes after you paste the real text here.' });
+  if (error) { showToast('Could not add chapter: ' + error.message); return; }
+  await loadAndRenderChapters();
 }
 
 async function updatePrice(id, val) {
@@ -1214,7 +1325,8 @@ bookFileInput.addEventListener('change', () => {
   const formatLabel = formatNames[ext] || ext.toUpperCase();
   uploadBox.classList.add('has-file');
   document.getElementById('uploadBoxText').textContent = file.name;
-  statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Automatic text extraction isn't built yet — paste the actual chapter text in the box below.`;
+  statusEl.className = 'upload-status warn';
+  statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> This file is NOT uploaded or read — this box only remembers the filename. You must paste the full book text into the box below, or nothing will be readable.`;
 });
 
 const podUploadBox = document.getElementById('podUploadBox');
