@@ -745,6 +745,18 @@
   .reader-view.dark .page-indicator { color: #9B927A; }
   .reader-view.dark .panel { background: #262420; border-color: rgba(220,211,188,0.1); }
   .reader-view.dark .panel-label { color: #9B927A; }
+  .contents-panel { width: 280px; max-height: 65vh; overflow-y: auto; padding: 10px 6px; }
+  .contents-heading { padding: 2px 8px 8px; }
+  .contents-item {
+    display: block; width: 100%; text-align: left; background: none; border: none;
+    padding: 8px; border-radius: 4px; cursor: pointer; font-family: var(--serif);
+    color: var(--text-on-parch); font-size: 14px; line-height: 1.35;
+  }
+  .contents-item:hover { background: rgba(36,30,20,0.06); }
+  .contents-item.current { background: rgba(36,30,20,0.08); font-weight: 700; }
+  .contents-item small { display: block; font-size: 12px; font-weight: 400; color: var(--text-on-parch-dim); margin-top: 2px; }
+  .reader-view.dark .contents-item { color: #DCD3BC; }
+  .reader-view.dark .contents-item:hover, .reader-view.dark .contents-item.current { background: rgba(220,211,188,0.1); }
   .reader-view.dark .stepper button { color: #DCD3BC; border-color: rgba(220,211,188,0.15); }
 
   .reader-view.sepia { background: #EDE0C8; }
@@ -841,6 +853,7 @@
     .page-content { padding: 4px 2px; }
     .page-content .chapter-title { font-size: 20px; }
     .panel { width: 180px; right: 8px; }
+    .contents-panel { width: min(280px, calc(100vw - 16px)); }
 
     .login-card { max-width: 300px; }
     .login-logo { width: 56px; height: 56px; }
@@ -986,9 +999,16 @@
       </button>
       <div class="reader-title-mini" id="readerTitleMini"></div>
       <div class="reader-controls">
+        <button class="ctrl-btn" id="contentsBtn" title="Contents">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
+        </button>
         <button class="ctrl-btn" id="settingsBtn" title="Display settings">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.2 4.2l4.2 4.2m7.2 7.2 4.2 4.2M1 12h6m10 0h6M4.2 19.8l4.2-4.2m7.2-7.2 4.2-4.2"/></svg>
         </button>
+      </div>
+      <div class="panel contents-panel" id="contentsPanel">
+        <div class="panel-label contents-heading" id="contentsLabel">Contents</div>
+        <div id="contentsList"></div>
       </div>
       <div class="panel" id="settingsPanel">
         <div class="panel-row">
@@ -1194,6 +1214,7 @@ async function loadBooks() {
     owned: ownedIds.has(b.id),
     progress: progressMap[b.id]?.percent || 0,
     _resumeChapterPosition: progressMap[b.id]?.chapter_position || 0,
+    _resumeParaPosition: progressMap[b.id]?.para_position || 0,
     _chaptersLoaded: false,
     chapters: [],
   }));
@@ -1204,6 +1225,8 @@ async function loadPodcasts() {
   if (error) { showToast('Could not load podcasts: ' + error.message); return; }
   const { data: grants } = await sb.from('access_grants').select('item_id').eq('reader_id', currentReader.id).eq('item_type', 'podcast');
   const ownedIds = new Set((grants || []).map(g => g.item_id));
+  const { data: podProgress } = await sb.from('podcast_progress').select('podcast_id, position_sec').eq('reader_id', currentReader.id);
+  const podProgressMap = Object.fromEntries((podProgress || []).map(r => [r.podcast_id, r.position_sec]));
 
   PODCASTS = (pods || []).map(p => ({
     id: p.id,
@@ -1216,6 +1239,7 @@ async function loadPodcasts() {
     duration: p.duration_sec || 0,
     owned: ownedIds.has(p.id),
     hasAudio: !!p.audio_path,
+    resumeAt: podProgressMap[p.id] || 0,
   }));
 }
 
@@ -1374,11 +1398,13 @@ async function openBook(id) {
   document.getElementById('readerTitleMini').textContent = currentBook.title;
   buildWatermark();
   paginateBook();
-  currentPageIdx = findPageIndexForAnchor({ chapterIdx: currentChapterIdx, firstPara: null });
+  currentPageIdx = findPageIndexForAnchor({ chapterIdx: currentChapterIdx, paraIdx: currentBook._resumeParaPosition || 0 });
   renderCurrentPage();
 }
 
 function closeBook() {
+  flushReadingProgress();
+  document.getElementById('contentsPanel').classList.remove('open');
   document.getElementById('readerView').classList.remove('active');
   document.getElementById('libraryView').style.display = 'block';
 }
@@ -1389,15 +1415,35 @@ function buildWatermark() {
   layer.innerHTML = `<span>${READER_NAME} · ${SESSION_ID}</span>`;
 }
 
-async function saveReadingProgress() {
+/* Progress is recorded on every page turn but only written to the database once the
+   reader pauses for a moment (or leaves the book / switches away from the app), so
+   flipping quickly through pages doesn't send a request per page. */
+let pendingProgressRow = null;
+let progressSaveTimer = null;
+
+function saveReadingProgress() {
   if (!currentReader || !currentBook) return;
   const percent = GLOBAL_PAGES.length > 1 ? Math.round((currentPageIdx / (GLOBAL_PAGES.length - 1)) * 100) : 100;
+  const paraPosition = GLOBAL_PAGES[currentPageIdx]?.startPara || 0;
   currentBook.progress = percent;
   currentBook._resumeChapterPosition = currentChapterIdx;
-  await sb.from('reading_progress').upsert(
-    { reader_id: currentReader.id, book_id: currentBook.id, chapter_position: currentChapterIdx, percent },
-    { onConflict: 'reader_id,book_id' }
-  );
+  currentBook._resumeParaPosition = paraPosition;
+  pendingProgressRow = { reader_id: currentReader.id, book_id: currentBook.id, chapter_position: currentChapterIdx, para_position: paraPosition, percent };
+  clearTimeout(progressSaveTimer);
+  progressSaveTimer = setTimeout(flushReadingProgress, 1500);
+}
+
+async function flushReadingProgress() {
+  clearTimeout(progressSaveTimer);
+  const row = pendingProgressRow;
+  if (!row) return;
+  pendingProgressRow = null;
+  const { error } = await sb.from('reading_progress').upsert(row, { onConflict: 'reader_id,book_id' });
+  if (error && /para_position/.test(error.message)) {
+    // Database not yet migrated (0010) — still save the chapter and percentage.
+    const { para_position, ...withoutPara } = row;
+    await sb.from('reading_progress').upsert(withoutPara, { onConflict: 'reader_id,book_id' });
+  }
 }
 
 /* ---------- Pagination engine ---------- */
@@ -1546,12 +1592,18 @@ function paginateBook() {
 
     let pageParas = [];
     let pageHasHeader = true;
+    let pageStartPara = null; // index (within the chapter) of the paragraph this page begins with
 
     const startFreshPage = (withHeader) => {
       el.innerHTML = withHeader ? chapterHeaderHtml(ch.label, ch.title) : '';
+      pageStartPara = null;
+    };
+    const addPara = (para, pi) => {
+      if (pageStartPara === null) pageStartPara = pi;
+      pageParas.push(para);
     };
     const pushPage = () => {
-      pages.push({ chapterIdx, label: pageHasHeader ? ch.label : '', title: pageHasHeader ? ch.title : '', paras: pageParas });
+      pages.push({ chapterIdx, startPara: pageStartPara ?? 0, label: pageHasHeader ? ch.label : '', title: pageHasHeader ? ch.title : '', paras: pageParas });
     };
 
     startFreshPage(true);
@@ -1562,7 +1614,7 @@ function paginateBook() {
       el.appendChild(p);
 
       if (measurerFits(el)) {
-        pageParas.push(para);
+        addPara(para, pi);
         continue;
       }
 
@@ -1574,13 +1626,13 @@ function paginateBook() {
 
       el.appendChild(p);
       if (measurerFits(el)) {
-        pageParas.push(para);
+        addPara(para, pi);
       } else {
         el.removeChild(p);
         const chunks = splitLongParagraph(el, para);
         chunks.forEach((chunk, ci) => {
           el.appendChild(paraElement(chunk));
-          pageParas.push(chunk);
+          addPara(chunk, pi);
           if (ci < chunks.length - 1) {
             pushPage();
             pageParas = [];
@@ -1599,18 +1651,24 @@ function paginateBook() {
 function currentPageAnchor() {
   const page = GLOBAL_PAGES[currentPageIdx];
   if (!page) return null;
-  return { chapterIdx: page.chapterIdx, firstPara: page.paras[0]?.html ?? null };
+  return { chapterIdx: page.chapterIdx, paraIdx: page.startPara };
 }
 
+/* The page showing paragraph `paraIdx` of the chapter: the page that starts exactly on
+   it if there is one, otherwise the last page starting before it. Works across screen
+   and text-size changes, because paragraphs don't move — only page breaks do. */
 function findPageIndexForAnchor(anchor) {
   if (!anchor || !GLOBAL_PAGES.length) return 0;
   const chapterStart = GLOBAL_PAGES.findIndex(pg => pg.chapterIdx === anchor.chapterIdx);
   if (chapterStart === -1) return 0;
-  if (anchor.firstPara != null) {
-    const exact = GLOBAL_PAGES.findIndex(pg => pg.chapterIdx === anchor.chapterIdx && pg.paras.some(p => p.html === anchor.firstPara));
-    if (exact !== -1) return exact;
+  const paraIdx = anchor.paraIdx || 0;
+  let best = chapterStart;
+  for (let i = chapterStart; i < GLOBAL_PAGES.length && GLOBAL_PAGES[i].chapterIdx === anchor.chapterIdx; i++) {
+    if (GLOBAL_PAGES[i].startPara > paraIdx) break;
+    if (GLOBAL_PAGES[i].startPara === paraIdx) return i;
+    best = i;
   }
-  return chapterStart;
+  return best;
 }
 
 function repaginateKeepingPlace() {
@@ -1649,8 +1707,10 @@ function goNextPage() {
   else showToast("You've reached the end of this book.");
 }
 
-document.getElementById('prevZone').addEventListener('click', goPrevPage);
-document.getElementById('nextZone').addEventListener('click', goNextPage);
+// A swipe that ends over an edge zone must not also count as a tap there (see swipe handling below).
+let suppressZoneClickUntil = 0;
+document.getElementById('prevZone').addEventListener('click', () => { if (Date.now() >= suppressZoneClickUntil) goPrevPage(); });
+document.getElementById('nextZone').addEventListener('click', () => { if (Date.now() >= suppressZoneClickUntil) goNextPage(); });
 document.getElementById('arrowPrevBtn').addEventListener('click', goPrevPage);
 document.getElementById('arrowNextBtn').addEventListener('click', goNextPage);
 document.getElementById('pageSlider').addEventListener('input', (e) => {
@@ -1673,8 +1733,40 @@ window.addEventListener('resize', () => {
 /* Settings panel */
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
-settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); settingsPanel.classList.toggle('open'); });
+settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); contentsPanel.classList.remove('open'); settingsPanel.classList.toggle('open'); });
 document.addEventListener('click', (e) => { if (!settingsPanel.contains(e.target) && e.target !== settingsBtn) settingsPanel.classList.remove('open'); });
+
+/* Contents: every chapter, tap to jump to its first page. */
+const contentsBtn = document.getElementById('contentsBtn');
+const contentsPanel = document.getElementById('contentsPanel');
+function renderContentsList() {
+  const list = document.getElementById('contentsList');
+  list.innerHTML = currentBook.chapters.map((ch, i) => {
+    // label/title are already sanitized (see openBook)
+    const name = ch.label || ch.title || `Chapter ${i + 1}`;
+    const sub = ch.label && ch.title ? `<small>${ch.title}</small>` : '';
+    return `<button class="contents-item${i === currentChapterIdx ? ' current' : ''}" data-chapter="${i}" dir="auto">${name}${sub}</button>`;
+  }).join('');
+  list.querySelectorAll('.contents-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = GLOBAL_PAGES.findIndex(pg => pg.chapterIdx === Number(btn.dataset.chapter));
+      contentsPanel.classList.remove('open');
+      if (idx !== -1) { currentPageIdx = idx; renderCurrentPage(); }
+    });
+  });
+}
+contentsBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  settingsPanel.classList.remove('open');
+  if (!contentsPanel.classList.contains('open')) {
+    renderContentsList();
+    contentsPanel.classList.add('open');
+    contentsPanel.querySelector('.contents-item.current')?.scrollIntoView({ block: 'nearest' });
+  } else {
+    contentsPanel.classList.remove('open');
+  }
+});
+document.addEventListener('click', (e) => { if (!contentsPanel.contains(e.target) && !contentsBtn.contains(e.target)) contentsPanel.classList.remove('open'); });
 
 document.getElementById('fontPlus').addEventListener('click', () => { fontSize = Math.min(24, fontSize + 1); repaginateKeepingPlace(); });
 document.getElementById('fontMinus').addEventListener('click', () => { fontSize = Math.max(13, fontSize - 1); repaginateKeepingPlace(); });
@@ -1720,6 +1812,27 @@ pageStage.addEventListener('touchend', (e) => {
     if (pinchStartDist) repaginateKeepingPlace();
     pinchStartDist = null;
   }
+});
+
+/* Swipe to turn pages: a quick, mostly-horizontal one-finger swipe. Left = next page,
+   right = previous. Any second finger (a pinch) cancels it. */
+let swipeStart = null;
+pageStage.addEventListener('touchstart', (e) => {
+  swipeStart = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+}, { passive: true });
+pageStage.addEventListener('touchmove', (e) => {
+  if (e.touches.length > 1) swipeStart = null;
+}, { passive: true });
+pageStage.addEventListener('touchend', (e) => {
+  if (!swipeStart || e.touches.length) return;
+  const touch = e.changedTouches[0];
+  const dx = touch.clientX - swipeStart.x;
+  const dy = touch.clientY - swipeStart.y;
+  const quick = Date.now() - swipeStart.t < 800;
+  swipeStart = null;
+  if (!quick || Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  suppressZoneClickUntil = Date.now() + 400;
+  if (dx < 0) goNextPage(); else goPrevPage();
 });
 
 document.querySelectorAll('.theme-dot').forEach(dot => {
@@ -1781,6 +1894,11 @@ document.addEventListener('visibilitychange', () => {
     document.getElementById('privacyShield').classList.remove('show');
   }
 });
+
+// Save the reader's place straight away if they switch apps or close the tab before
+// the short save delay has passed.
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushReadingProgress(); });
+window.addEventListener('pagehide', () => flushReadingProgress());
 
 /* ============ App-wide light / dark mode toggle ============ */
 const appThemeToggle = document.getElementById('appThemeToggle');
@@ -1913,6 +2031,9 @@ let currentPodcast = null;
 let podcastPlaying = false;
 let podcastSpeed = 1;
 let podcastUnlocking = false; // true while the silent unlock clip is playing — see openPodcast()
+let podcastReady = false;        // the real episode (not the unlock clip) has loaded and any resume seek is done
+let podcastPendingSeek = null;   // seconds to jump to once the episode's metadata loads
+let podcastLastSavedAt = 0;
 const podcastAudioEl = document.getElementById('podcastAudioEl');
 
 // A real (if silent) ~50ms WAV clip. iOS Safari only "unlocks" an <audio> element for
@@ -1945,6 +2066,8 @@ async function openPodcast(id) {
   podcastAudioEl.currentTime = 0;
   podcastAudioEl.playbackRate = 1;
   podcastAudioEl.muted = false;
+  podcastReady = false;
+  podcastPendingSeek = null;
   podcastUnlocking = true;
   podcastAudioEl.src = SILENT_AUDIO_URI;
   const unlockAttempt = podcastAudioEl.play();
@@ -1961,7 +2084,10 @@ async function openPodcast(id) {
   }
   podcastAudioEl.pause();
   podcastAudioEl.currentTime = 0;
+  // Resume where this listener stopped last time (applied once the file's length is known).
+  podcastPendingSeek = currentPodcast.resumeAt > 5 ? currentPodcast.resumeAt : null;
   podcastAudioEl.src = data.url;
+  setMediaSessionMetadata();
   playPodcast();
 }
 
@@ -1978,6 +2104,7 @@ function playPodcast() {
   podcastPlaying = true;
   document.getElementById('podcastPlayIcon').style.display = 'none';
   document.getElementById('podcastPauseIcon').style.display = 'block';
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
   podcastAudioEl.play().catch(() => {
     showToast("Couldn't play audio right now — check your connection.");
     pausePodcast();
@@ -1988,28 +2115,114 @@ function pausePodcast() {
   podcastPlaying = false;
   document.getElementById('podcastPlayIcon').style.display = 'block';
   document.getElementById('podcastPauseIcon').style.display = 'none';
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
   podcastAudioEl.pause();
+  savePodcastProgress();
 }
 
-podcastAudioEl.addEventListener('timeupdate', () => { if (podcastPlaying && !podcastUnlocking) updatePodcastProgress(); });
-podcastAudioEl.addEventListener('loadedmetadata', () => { if (!podcastUnlocking) updatePodcastProgress(); });
+function skipPodcast(seconds) {
+  podcastAudioEl.currentTime = Math.max(0, Math.min(podcastAudioEl.duration || 0, podcastAudioEl.currentTime + seconds));
+  updatePodcastProgress();
+}
+
+/* ---------- Remember the listening position (podcast_progress) ---------- */
+function savePodcastProgress(positionOverride) {
+  // Only once the real episode has loaded and any resume jump is done — otherwise the
+  // unlock clip or a not-yet-applied seek would overwrite the saved spot with 0.
+  if (!currentReader || !currentPodcast || !podcastReady) return;
+  const position = Math.floor(positionOverride ?? podcastAudioEl.currentTime ?? 0);
+  currentPodcast.resumeAt = position;
+  podcastLastSavedAt = Date.now();
+  sb.from('podcast_progress').upsert(
+    { reader_id: currentReader.id, podcast_id: currentPodcast.id, position_sec: position, updated_at: new Date().toISOString() },
+    { onConflict: 'reader_id,podcast_id' }
+  ).then(() => {}, () => {});
+}
+
+/* ---------- Lock screen / notification / headphone controls (Media Session) ---------- */
+function setMediaSessionMetadata() {
+  if (!('mediaSession' in navigator) || !currentPodcast) return;
+  const artworkSrc = currentPodcast.coverImage || new URL('../shared/icons/icon-512.png', location.href).href;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: currentPodcast.title || '',
+    artist: currentPodcast.host || '',
+    album: "King's Library",
+    artwork: [{ src: artworkSrc, sizes: '512x512' }],
+  });
+}
+
+function updateMediaSessionPosition() {
+  if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+  const duration = podcastAudioEl.duration;
+  if (!duration || !isFinite(duration)) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration,
+      playbackRate: podcastAudioEl.playbackRate || 1,
+      position: Math.min(podcastAudioEl.currentTime || 0, duration),
+    });
+  } catch (e) { /* some browsers reject position updates mid-seek — harmless */ }
+}
+
+if ('mediaSession' in navigator) {
+  const handlers = {
+    play: () => playPodcast(),
+    pause: () => pausePodcast(),
+    seekbackward: (d) => skipPodcast(-(d?.seekOffset || 15)),
+    seekforward: (d) => skipPodcast(d?.seekOffset || 15),
+    seekto: (d) => {
+      if (d?.seekTime == null) return;
+      podcastAudioEl.currentTime = Math.max(0, Math.min(podcastAudioEl.duration || 0, d.seekTime));
+      updatePodcastProgress();
+    },
+  };
+  for (const [action, fn] of Object.entries(handlers)) {
+    try { navigator.mediaSession.setActionHandler(action, fn); } catch (e) { /* action not supported on this browser */ }
+  }
+}
+
+podcastAudioEl.addEventListener('timeupdate', () => {
+  if (podcastPlaying && !podcastUnlocking) {
+    updatePodcastProgress();
+    if (podcastReady && Date.now() - podcastLastSavedAt > 10000) savePodcastProgress();
+  }
+});
+podcastAudioEl.addEventListener('loadedmetadata', () => {
+  if (podcastUnlocking) return;
+  const duration = podcastAudioEl.duration || 0;
+  if (podcastPendingSeek != null) {
+    // Near the very end means they finished it last time — start from the beginning instead.
+    if (duration && podcastPendingSeek < duration - 10) {
+      podcastAudioEl.currentTime = podcastPendingSeek;
+      showToast(`Resuming from ${formatTime(podcastPendingSeek)}`);
+    }
+    podcastPendingSeek = null;
+  }
+  podcastReady = true;
+  podcastLastSavedAt = Date.now();
+  updatePodcastProgress();
+  updateMediaSessionPosition();
+});
+podcastAudioEl.addEventListener('seeked', () => { if (!podcastUnlocking) updateMediaSessionPosition(); });
+podcastAudioEl.addEventListener('ratechange', () => { if (!podcastUnlocking) updateMediaSessionPosition(); });
 podcastAudioEl.addEventListener('ended', () => {
   if (podcastUnlocking) return; // the silent unlock clip ending — not a real episode finishing
+  savePodcastProgress(0); // finished — next time starts from the beginning
+  podcastReady = false;   // …and stop pausePodcast() from also saving the end position
   pausePodcast();
+  podcastReady = true;
   showToast("Episode finished.");
 });
+
+// Save the listening spot if the app is closed or switched away from mid-episode.
+document.addEventListener('visibilitychange', () => { if (document.hidden && podcastPlaying) savePodcastProgress(); });
+window.addEventListener('pagehide', () => { if (podcastPlaying) savePodcastProgress(); });
 
 document.getElementById('podcastPlayBtn').addEventListener('click', () => {
   podcastPlaying ? pausePodcast() : playPodcast();
 });
-document.getElementById('podcastSkipBack').addEventListener('click', () => {
-  podcastAudioEl.currentTime = Math.max(0, podcastAudioEl.currentTime - 15);
-  updatePodcastProgress();
-});
-document.getElementById('podcastSkipFwd').addEventListener('click', () => {
-  podcastAudioEl.currentTime = Math.min(podcastAudioEl.duration || 0, podcastAudioEl.currentTime + 15);
-  updatePodcastProgress();
-});
+document.getElementById('podcastSkipBack').addEventListener('click', () => skipPodcast(-15));
+document.getElementById('podcastSkipFwd').addEventListener('click', () => skipPodcast(15));
 document.getElementById('podcastScrubTrack').addEventListener('click', (e) => {
   const rect = e.currentTarget.getBoundingClientRect();
   const ratio = (e.clientX - rect.left) / rect.width;
@@ -2052,6 +2265,7 @@ const UI_STRINGS = {
     resendBtn: "Resend code",
     backToLibrary: "Library",
     textSize: "Text size",
+    contents: "Contents",
     theme: "Theme",
     nowPlaying: "Now Playing",
     privacyShieldText: "This book is only viewable inside King's Library. Content is hidden while the window is out of focus.",
@@ -2079,6 +2293,7 @@ const UI_STRINGS = {
     resendBtn: "कोड फिर भेजें",
     backToLibrary: "लाइब्रेरी",
     textSize: "टेक्स्ट आकार",
+    contents: "विषय-सूची",
     theme: "थीम",
     nowPlaying: "अभी चल रहा है",
     privacyShieldText: "यह किताब केवल किंग्स लाइब्रेरी के अंदर देखी जा सकती है। विंडो फोकस से बाहर होने पर सामग्री छिप जाती है।",
@@ -2106,6 +2321,7 @@ const UI_STRINGS = {
     resendBtn: "ਕੋਡ ਦੁਬਾਰਾ ਭੇਜੋ",
     backToLibrary: "ਲਾਇਬ੍ਰੇਰੀ",
     textSize: "ਟੈਕਸਟ ਆਕਾਰ",
+    contents: "ਤਤਕਰਾ",
     theme: "ਥੀਮ",
     nowPlaying: "ਹੁਣ ਚੱਲ ਰਿਹਾ ਹੈ",
     privacyShieldText: "ਇਹ ਕਿਤਾਬ ਸਿਰਫ਼ ਕਿੰਗਜ਼ ਲਾਇਬ੍ਰੇਰੀ ਦੇ ਅੰਦਰ ਹੀ ਦੇਖੀ ਜਾ ਸਕਦੀ ਹੈ। ਵਿੰਡੋ ਫੋਕਸ ਤੋਂ ਬਾਹਰ ਹੋਣ 'ਤੇ ਸਮੱਗਰੀ ਲੁਕ ਜਾਂਦੀ ਹੈ।",
@@ -2152,6 +2368,8 @@ function applyTranslations() {
 
   document.querySelectorAll('.backLibraryLabel').forEach(el => el.textContent = s.backToLibrary);
   setText('textSizeLabel', s.textSize);
+  setText('contentsLabel', s.contents);
+  document.getElementById('contentsBtn').title = s.contents;
   setText('themeLabel', s.theme);
   setText('podcastNowPlayingLabel', s.nowPlaying);
   setText('privacyShieldTextEl', s.privacyShieldText);
