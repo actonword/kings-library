@@ -602,6 +602,7 @@
     color: var(--gold);
     margin-bottom: 14px;
     font-weight: 600;
+    text-align: center;
   }
   .page-content .chapter-title {
     font-family: var(--serif);
@@ -609,15 +610,21 @@
     font-weight: 600;
     margin-bottom: 18px;
     line-height: 1.3;
+    text-align: center;
   }
+  /* Body text is justified like a printed book. Size is 1em so the reader's
+     text-size buttons and pinch (set on .page-content) actually apply. */
   .page-content p {
     font-family: var(--serif);
-    font-size: 17px;
+    font-size: 1em;
     line-height: 1.75;
     margin-bottom: 14px;
     color: var(--text-on-parch);
+    text-align: justify;
+    -webkit-hyphens: auto;
+    hyphens: auto;
   }
-  .page-content.rtl { direction: rtl; text-align: right; }
+  .page-content.rtl { direction: rtl; }
   .page-content.rtl p, .page-content.rtl .chapter-title { font-family: 'Noto Nastaliq Urdu', var(--serif); }
   .page-content.devanagari p, .page-content.devanagari .chapter-title { font-family: 'Noto Sans Devanagari', var(--serif); }
   .page-content.gurmukhi p, .page-content.gurmukhi .chapter-title { font-family: 'Noto Sans Gurmukhi', var(--serif); }
@@ -824,7 +831,6 @@
     .page-wrap { width: 94vw; height: 76vh; }
     .page-content { padding: 4px 2px; }
     .page-content .chapter-title { font-size: 20px; }
-    .page-content p { font-size: 15.5px; }
     .panel { width: 180px; right: 8px; }
 
     .login-card { max-width: 300px; }
@@ -1312,7 +1318,7 @@ document.getElementById('langSelect').addEventListener('change', () => { renderL
 /* ============ Reader logic ============ */
 let currentBook = null;
 let currentChapterIdx = 0;
-let fontSize = 17;
+let fontSize = window.matchMedia('(max-width: 640px)').matches ? 16 : 17;
 
 /* Real pagination: each chapter's text is split into as many actual pages as it
    takes to fit the reader's viewport, instead of one long chapter crammed into
