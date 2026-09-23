@@ -111,6 +111,9 @@
   .stat-card { background: var(--ink-soft); border: 1px solid rgba(233,226,208,0.07); border-radius: 10px; padding: 20px; }
   .stat-card .stat-label { font-size: 12px; color: var(--text-on-ink-dim); margin-bottom: 8px; }
   .stat-card .stat-value { font-family: var(--serif); font-size: 28px; font-weight: 600; color: var(--gold-bright); }
+  .stat-card .stat-sub { font-size: 11.5px; color: var(--text-on-ink-dim); margin-top: 6px; }
+  .stat-group-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-on-ink-dim); margin-bottom: 10px; }
+  .stat-group-label + .stat-grid { margin-bottom: 26px; }
 
   .panel-block { background: var(--ink-soft); border: 1px solid rgba(233,226,208,0.07); border-radius: 10px; padding: 22px; margin-bottom: 24px; }
   .panel-block h3 { font-family: var(--serif); font-size: 15px; font-weight: 600; margin-bottom: 14px; }
@@ -340,11 +343,21 @@
     <!-- DASHBOARD -->
     <div id="dashboardView" class="view active">
       <div class="page-head"><h1>Dashboard</h1><p>A quick look at King's Library.</p></div>
+      <div class="stat-group-label">Library</div>
       <div class="stat-grid">
-        <div class="stat-card"><div class="stat-label">Total Books</div><div class="stat-value" id="statBooks">0</div></div>
-        <div class="stat-card"><div class="stat-label">Total Readers</div><div class="stat-value" id="statReaders">0</div></div>
-        <div class="stat-card"><div class="stat-label">Items Sold (books &amp; podcasts)</div><div class="stat-value" id="statSold">0</div></div>
-        <div class="stat-card"><div class="stat-label">Total Revenue</div><div class="stat-value" id="statRevenue">₹0</div></div>
+        <div class="stat-card"><div class="stat-label">Books</div><div class="stat-value" id="statBooks">0</div><div class="stat-sub" id="statBooksSub"></div></div>
+        <div class="stat-card"><div class="stat-label">Podcasts</div><div class="stat-value" id="statPodcasts">0</div><div class="stat-sub" id="statPodcastsSub"></div></div>
+      </div>
+      <div class="stat-group-label">People</div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Readers</div><div class="stat-value" id="statReaders">0</div><div class="stat-sub">own at least one book</div></div>
+        <div class="stat-card"><div class="stat-label">Listeners</div><div class="stat-value" id="statListeners">0</div><div class="stat-sub">own at least one podcast</div></div>
+        <div class="stat-card"><div class="stat-label">Total Customers</div><div class="stat-value" id="statCustomers">0</div><div class="stat-sub" id="statCustomersSub"></div></div>
+      </div>
+      <div class="stat-group-label">Sales</div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Items Sold</div><div class="stat-value" id="statSold">0</div><div class="stat-sub" id="statSoldSub"></div></div>
+        <div class="stat-card"><div class="stat-label">Total Revenue</div><div class="stat-value" id="statRevenue">₹0</div><div class="stat-sub" id="statRevenueSub"></div></div>
       </div>
       <div class="panel-block">
         <h3>Recent Activity</h3>
@@ -982,13 +995,36 @@ async function loadEverything() {
 
 /* ---------- Dashboard ---------- */
 function renderDashboard() {
-  document.getElementById('statBooks').textContent = BOOKS.length;
-  document.getElementById('statReaders').textContent = READERS.length;
-  // Revenue uses the price recorded when each access was granted (free gifts are 0).
-  const paid = GRANTS.map(grantPricePaid).filter(p => p > 0);
-  document.getElementById('statSold').textContent = paid.length;
-  const revenue = paid.reduce((sum, p) => sum + p, 0);
-  document.getElementById('statRevenue').textContent = '₹' + revenue.toLocaleString('en-IN');
+  const set = (id, text) => { document.getElementById(id).textContent = text; };
+  const rupees = (n) => '₹' + n.toLocaleString('en-IN');
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  // Library
+  const liveCount = (items) => items.filter(x => x.status !== 'draft').length;
+  set('statBooks', BOOKS.length);
+  set('statBooksSub', `${liveCount(BOOKS)} live · ${BOOKS.length - liveCount(BOOKS)} draft`);
+  set('statPodcasts', PODCASTS.length);
+  set('statPodcastsSub', `${liveCount(PODCASTS)} live · ${PODCASTS.length - liveCount(PODCASTS)} draft`);
+
+  // People: a customer can be a reader, a listener, or both.
+  const readers = READERS.filter(r => r.items.some(i => i.type === 'book'));
+  const listeners = READERS.filter(r => r.items.some(i => i.type === 'podcast'));
+  const customers = READERS.filter(r => r.items.length);
+  const both = customers.filter(r => readers.includes(r) && listeners.includes(r)).length;
+  set('statReaders', readers.length);
+  set('statListeners', listeners.length);
+  set('statCustomers', customers.length);
+  set('statCustomersSub', `${both} own both books & podcasts`);
+
+  // Sales: uses the price recorded when each access was granted (free gifts are 0).
+  const paidOf = (type) => GRANTS.filter(g => g.item_type === type).map(grantPricePaid).filter(p => p > 0);
+  const paidBooks = paidOf('book'), paidPods = paidOf('podcast');
+  const sum = (arr) => arr.reduce((s, p) => s + p, 0);
+  const gifts = GRANTS.filter(g => grantPricePaid(g) === 0).length;
+  set('statSold', paidBooks.length + paidPods.length);
+  set('statSoldSub', `${plural(paidBooks.length, 'book')} · ${plural(paidPods.length, 'podcast')}${gifts ? ` · ${plural(gifts, 'free gift')} not counted` : ''}`);
+  set('statRevenue', rupees(sum(paidBooks) + sum(paidPods)));
+  set('statRevenueSub', `${rupees(sum(paidBooks))} books · ${rupees(sum(paidPods))} podcasts`);
   document.getElementById('dashboardLog').innerHTML = LOG.slice(0, 4).map(l =>
     `<div class="log-entry"><div class="log-time">${l.time}</div><div class="log-body">${l.body}</div></div>`
   ).join('') || '<p style="color:var(--text-on-ink-dim);font-size:13px;">No activity yet.</p>';
@@ -1369,6 +1405,7 @@ async function setBookStatus(id, status) {
   renderBooksTable();
   renderGrantBookChecks();
   renderNotifBookOptions();
+  renderDashboard();
   showToast(status === 'published' ? `"${book?.title}" is now live on the website and app.` : `"${book?.title}" is now a draft — hidden from readers.`);
 }
 
@@ -1701,6 +1738,7 @@ async function setPodcastStatus(id, status) {
   await loadPodcasts();
   renderPodcastsTable();
   renderGrantPodChecks();
+  renderDashboard();
   showToast(status === 'published' ? `"${pod?.title}" is now live on the website and app.` : `"${pod?.title}" is now a draft — hidden from listeners.`);
 }
 
