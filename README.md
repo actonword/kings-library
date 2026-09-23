@@ -19,10 +19,14 @@ _original-mockups/   the original static demo files, kept for reference
 - No online payments yet. A buyer pays you outside the system; you grant access by
   email in the admin panel. That's what creates their account and emails them the
   6-digit sign-in code.
-- Book chapters: uploading an **.epub** in Manage Books auto-extracts its chapters
-  (parsed client-side in the browser with JSZip — no server involved). **.docx/.pdf
-  still require pasting the text manually** — no parser for those yet. Admin can
-  review/edit/add/delete chapters any time via the "Content" button on each book row.
+- Book chapters: uploading an **.epub, .docx, .pdf or .txt** in Manage Books
+  auto-splits it into chapters, all client-side in the browser (JSZip for EPUB;
+  mammoth.js and pdf.js are lazy-loaded from jsDelivr for Word/PDF). Detection order:
+  EPUB spine / Word heading styles / PDF bookmarks → "Chapter …"-style lines (English,
+  Hindi, Punjabi, Arabic) → large-font lines (PDF) → fixed ~15k-char "Part N" chunks.
+  Pasted text is split the same way. Scanned (image-only) PDFs have no text and can't be
+  read. The "Content" button can also replace a book's chapters from a file, and
+  review/edit/add/delete them individually.
 - Public sign-up (`enable_signup`) is left **on** at the project level — see "Known
   CLI landmine" below for why. This is safe: every RLS policy requires a matching row
   in `profiles`/`access_grants`, which only the `grant-access` Edge Function (service

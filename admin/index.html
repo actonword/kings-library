@@ -355,15 +355,15 @@
             </div>
           </div>
           <div class="form-field full">
-            <label>Upload the book file — EPUB chapters are read automatically; Word/PDF are not yet</label>
+            <label>Upload the book file — chapters are found and set up automatically</label>
             <div class="upload-box" id="uploadBox">
-              <input type="file" id="bookFileInput" accept=".epub,.docx,.pdf" style="display:none;">
+              <input type="file" id="bookFileInput" accept=".epub,.docx,.pdf,.txt" style="display:none;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-              <span id="uploadBoxText">Click to choose a file — .epub, .docx, or .pdf</span>
+              <span id="uploadBoxText">Click to choose a file — EPUB, Word (.docx), PDF, or text (.txt)</span>
             </div>
             <div id="uploadStatus" class="upload-status"></div>
           </div>
-          <div class="form-field full"><label>Chapter 1 text — only needed if you didn't upload an EPUB above (Word/PDF/manual entry)</label><textarea id="newBookContent" placeholder="Paste or type the full text of the first chapter here..."></textarea></div>
+          <div class="form-field full"><label>Or paste the whole book's text here (not needed if you uploaded a file) — chapters are split automatically</label><textarea id="newBookContent" placeholder="Paste the full book text here. Lines like &quot;Chapter 1&quot;, &quot;Part Two&quot; or &quot;अध्याय 3&quot; start a new chapter."></textarea></div>
         </div>
         <div id="addBookError" style="display:none; color:var(--red); font-weight:600; font-size:12.5px; background:rgba(196,87,74,0.1); border:1px solid rgba(196,87,74,0.3); border-radius:6px; padding:10px 12px; margin-bottom:12px;"></div>
         <button class="btn btn-gold" onclick="addBook()">Add Book</button>
@@ -411,6 +411,15 @@
         </div>
 
         <h3 style="font-family:var(--serif);font-size:15px;font-weight:600;margin-bottom:14px;">Chapters</h3>
+        <div class="form-field full" style="margin-bottom:18px;">
+          <label>Replace all chapters from a book file — EPUB, Word (.docx), PDF, or text (.txt)</label>
+          <div class="upload-box" id="replaceChaptersUploadBox">
+            <input type="file" id="replaceChaptersInput" accept=".epub,.docx,.pdf,.txt" style="display:none;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            <span id="replaceChaptersText">Click to choose the book file — its chapters will be found automatically</span>
+          </div>
+          <div id="replaceChaptersStatus" class="upload-status"></div>
+        </div>
         <div id="chapterList"></div>
         <button class="btn btn-gold" onclick="addChapterToCurrentBook()">+ Add Another Chapter</button>
       </div>
@@ -976,6 +985,7 @@ async function openContentModal(bookId) {
   } else {
     badge.style.display = 'none';
   }
+  document.getElementById('replaceChaptersStatus').innerHTML = '';
   document.getElementById('contentModalOverlay').classList.add('open');
   await loadAndRenderChapters();
 }
@@ -1136,7 +1146,7 @@ async function addBook() {
   }
   const hasEpubChapters = pendingEpubChapters && pendingEpubChapters.length > 0;
   if (!contentText && !hasEpubChapters) {
-    if (!confirm("You haven't pasted any chapter text (and no EPUB was successfully read). This book will be added but will show as EMPTY to readers — they won't be able to read anything. Add it anyway and paste the text later?")) {
+    if (!confirm("You haven't uploaded a readable book file or pasted any text. This book will be added but will show as EMPTY to readers — they won't be able to read anything. Add it anyway and paste the text later?")) {
       errorBox.style.display = 'block';
       errorBox.textContent = 'Not added — paste the chapter text first, or confirm the empty-book warning.';
       return;
@@ -1164,13 +1174,12 @@ async function addBook() {
   });
   if (error) { showToast('Could not add book: ' + error.message); return; }
 
-  const epubChapterCount = hasEpubChapters ? pendingEpubChapters.length : 0;
-  if (hasEpubChapters) {
-    const rows = pendingEpubChapters.map((c, i) => ({ book_id: id, position: i + 1, label: c.label, title: null, content: c.content }));
+  const chaptersToSave = hasEpubChapters ? pendingEpubChapters : (contentText ? splitTextIntoChapters(contentText).chapters : []);
+  const epubChapterCount = chaptersToSave.length;
+  if (chaptersToSave.length) {
+    const rows = chaptersToSave.map((c, i) => ({ book_id: id, position: i + 1, label: c.label, title: c.title || null, content: c.content }));
     const { error: chError } = await sb.from('chapters').insert(rows);
     if (chError) showToast('Book added, but chapters failed to save: ' + chError.message);
-  } else if (contentText) {
-    await sb.from('chapters').insert({ book_id: id, position: 1, label: 'Chapter One', title: null, content: contentText });
   }
   pendingEpubChapters = null;
   pendingSourceFormat = null;
@@ -1183,7 +1192,7 @@ async function addBook() {
   document.getElementById('newBookContent').value = '';
   bookFileInput.value = '';
   uploadBox.classList.remove('has-file');
-  document.getElementById('uploadBoxText').textContent = 'Click to choose a file — .epub, .docx, or .pdf';
+  document.getElementById('uploadBoxText').textContent = 'Click to choose a file — EPUB, Word (.docx), PDF, or text (.txt)';
   const uploadStatusEl = document.getElementById('uploadStatus');
   uploadStatusEl.innerHTML = '';
   uploadStatusEl.style.color = '';
@@ -1199,7 +1208,7 @@ async function addBook() {
   renderDashboard();
   renderNotifBookOptions();
   showToast(epubChapterCount
-    ? `"${title}" added with ${epubChapterCount} chapter${epubChapterCount === 1 ? '' : 's'} from the EPUB.`
+    ? `"${title}" added with ${epubChapterCount} chapter${epubChapterCount === 1 ? '' : 's'}.`
     : `"${title}" added to King's Library.`);
 }
 
@@ -1682,6 +1691,233 @@ async function parseEpubFile(file) {
   return chapters;
 }
 
+/* ---------- Word / PDF / text → chapters ----------
+   Word and PDF libraries are loaded only when such a file is chosen, so the admin
+   panel stays fast. Every format ends up as a list of { label, title, content }. */
+const loadedScripts = {};
+function loadScript(src) {
+  if (!loadedScripts[src]) {
+    loadedScripts[src] = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => { delete loadedScripts[src]; reject(new Error('could not load the file reader — check your internet connection')); };
+      document.head.appendChild(s);
+    });
+  }
+  return loadedScripts[src];
+}
+
+// A line that looks like the start of a chapter, in English and the other scripts the library carries.
+const CHAPTER_HEADING_RE = /^(chapter|chap\.|part|book|section|lesson|prologue|epilogue|introduction|preface|foreword|afterword|conclusion|appendix|अध्याय|भाग|पाठ|प्रस्तावना|ਅਧਿਆਇ|ਭਾਗ|باب|الفصل|فصل)(?=$|[\s.:\-–—])/i;
+const ROMAN_HEADING_RE = /^[IVXLC]{1,7}\.?$/;
+
+function isHeadingLine(line) {
+  const t = line.trim();
+  if (!t || t.length > 80) return false;
+  return CHAPTER_HEADING_RE.test(t) || ROMAN_HEADING_RE.test(t);
+}
+
+/* blocks: [{ text, heading }] in reading order, where heading=true marks a chapter start.
+   Tiny sections (table-of-contents entries, blank title pages) are dropped. */
+function blocksToChapters(blocks) {
+  const chapters = [];
+  let current = null;
+  let preface = [];
+  for (const b of blocks) {
+    if (b.heading) {
+      current = { label: b.text.trim().slice(0, 80), paras: [] };
+      chapters.push(current);
+    } else if (current) {
+      current.paras.push(b.text);
+    } else {
+      preface.push(b.text);
+    }
+  }
+  const result = [];
+  const prefaceText = preface.join('\n\n').trim();
+  if (prefaceText.length >= 300) result.push({ label: 'Introduction', title: null, content: prefaceText });
+  for (const c of chapters) {
+    // "Chapter 3" followed by a short line is usually the chapter's name — use it as the title.
+    let title = null;
+    if (c.paras.length > 1 && c.paras[0].length <= 80 && !/[.!?]$/.test(c.paras[0]) && /^(chapter|part|book|अध्याय|ਅਧਿਆਇ|باب|الفصل)/i.test(c.label) && c.label.split(/\s+/).length <= 3) {
+      title = c.paras.shift();
+    }
+    const content = c.paras.join('\n\n').trim();
+    if (content.length < 150) continue;
+    result.push({ label: c.label, title, content });
+  }
+  return result;
+}
+
+// No headings found at all: split a long text into readable parts at paragraph breaks.
+function chunkIntoParts(paras, targetChars = 15000) {
+  const parts = [];
+  let buf = [], size = 0;
+  for (const p of paras) {
+    buf.push(p); size += p.length;
+    if (size >= targetChars) { parts.push(buf); buf = []; size = 0; }
+  }
+  if (buf.length) {
+    if (parts.length && size < targetChars / 3) parts[parts.length - 1].push(...buf);
+    else parts.push(buf);
+  }
+  return parts.map((ps, i) => ({ label: `Part ${i + 1}`, title: null, content: ps.join('\n\n') }));
+}
+
+/* Plain text (pasted, .txt, or extracted from Word/PDF) → chapters. */
+function splitTextIntoChapters(text, extraHeadingIdx) {
+  const paras = text.replace(/\r\n?/g, '\n').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  // A heading line glued to the paragraph after it ("Chapter 1\nIt was a…") becomes its own block.
+  const blocks = [];
+  paras.forEach((p, i) => {
+    const firstBreak = p.indexOf('\n');
+    const firstLine = firstBreak === -1 ? p : p.slice(0, firstBreak);
+    if ((extraHeadingIdx && extraHeadingIdx.has(i)) || isHeadingLine(firstLine)) {
+      blocks.push({ text: firstLine.trim(), heading: true });
+      if (firstBreak !== -1) blocks.push({ text: p.slice(firstBreak + 1).replace(/\s*\n\s*/g, ' ').trim(), heading: false });
+    } else {
+      blocks.push({ text: p.replace(/\s*\n\s*/g, ' '), heading: false });
+    }
+  });
+  const chapters = blocks.filter(b => b.heading).length >= 2 ? blocksToChapters(blocks) : [];
+  if (chapters.length >= 2) return { chapters, detected: true };
+  const plain = blocks.map(b => b.text);
+  const total = plain.reduce((s, p) => s + p.length, 0);
+  if (total > 30000) return { chapters: chunkIntoParts(plain), detected: false };
+  return { chapters: total ? [{ label: 'Chapter One', title: null, content: plain.join('\n\n') }] : [], detected: false };
+}
+
+async function parseDocxFile(file) {
+  await loadScript('https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js');
+  const { value: html } = await window.mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const els = Array.from(doc.body.children);
+  // Use the biggest heading style the author used for at least two sections (Heading 1, else 2, else 3).
+  const level = ['H1', 'H2', 'H3'].find(tag => els.filter(e => e.tagName === tag).length >= 2);
+  if (level) {
+    const blocks = [];
+    for (const e of els) {
+      const text = e.textContent.trim();
+      if (!text) continue;
+      if (e.tagName === level) blocks.push({ text, heading: true });
+      else if (e.tagName === 'UL' || e.tagName === 'OL') e.querySelectorAll('li').forEach(li => blocks.push({ text: '• ' + li.textContent.trim(), heading: false }));
+      else blocks.push({ text, heading: false });
+    }
+    const chapters = blocksToChapters(blocks);
+    if (chapters.length >= 2) return { chapters, detected: true };
+  }
+  return splitTextIntoChapters(htmlDocToPlainText(doc));
+}
+
+async function parsePdfFile(file) {
+  await loadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js');
+  const pdfjsLib = window.pdfjsLib;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+
+  // Read every page into paragraphs, noting unusually large text (likely headings).
+  const pages = [];
+  const allHeights = [];
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const page = await pdf.getPage(n);
+    const tc = await page.getTextContent();
+    const lines = [];
+    for (const item of tc.items) {
+      if (!item.str) continue;
+      const y = item.transform[5];
+      const h = Math.abs(item.transform[3]) || item.height || 0;
+      let line = lines.find(l => Math.abs(l.y - y) < Math.max(2, h * 0.4));
+      if (!line) { line = { y, h, text: '' }; lines.push(line); }
+      line.text += (line.text && !line.text.endsWith(' ') && !item.str.startsWith(' ') ? ' ' : '') + item.str;
+      line.h = Math.max(line.h, h);
+    }
+    lines.sort((a, b) => b.y - a.y);
+    const clean = lines.map(l => ({ ...l, text: l.text.replace(/\s+/g, ' ').trim() }))
+      .filter(l => l.text && !/^\d{1,4}$/.test(l.text)); // drop bare page numbers
+    clean.forEach(l => allHeights.push(l.h));
+    pages.push(clean);
+  }
+  if (!allHeights.length) throw new Error('this PDF has no selectable text (it may be scanned images)');
+  const sortedH = [...allHeights].sort((a, b) => a - b);
+  const bodyH = sortedH[Math.floor(sortedH.length / 2)];
+
+  const pageParas = pages.map(lines => {
+    const paras = [];
+    let cur = null, prev = null;
+    for (const l of lines) {
+      const big = l.h >= bodyH * 1.35 && l.text.length <= 80;
+      const gap = prev ? prev.y - l.y : 0;
+      const newPara = !cur || big || cur.big || gap > Math.max(prev.h, l.h) * 1.6;
+      if (newPara) { cur = { text: l.text, big }; paras.push(cur); }
+      else cur.text = cur.text.endsWith('-') ? cur.text.slice(0, -1) + l.text : cur.text + ' ' + l.text;
+      prev = l;
+    }
+    return paras;
+  });
+
+  // 1) Best case: the PDF has bookmarks (a table of contents) — split on those pages.
+  try {
+    const outline = await pdf.getOutline();
+    if (outline && outline.length >= 2) {
+      const starts = [];
+      for (const item of outline) {
+        let dest = item.dest;
+        if (typeof dest === 'string') dest = await pdf.getDestination(dest);
+        if (!Array.isArray(dest) || !dest[0]) continue;
+        const pageIdx = typeof dest[0] === 'number' ? dest[0] : await pdf.getPageIndex(dest[0]);
+        starts.push({ label: item.title.trim().slice(0, 80), pageIdx });
+      }
+      starts.sort((a, b) => a.pageIdx - b.pageIdx);
+      const chapters = [];
+      starts.forEach((s, i) => {
+        const end = i + 1 < starts.length ? starts[i + 1].pageIdx : pages.length;
+        const paras = pageParas.slice(s.pageIdx, Math.max(end, s.pageIdx + 1)).flat().map(p => p.text);
+        if (paras.length && paras[0].trim().toLowerCase() === s.label.toLowerCase()) paras.shift();
+        const content = paras.join('\n\n').trim();
+        if (content.length >= 150) chapters.push({ label: s.label, title: null, content });
+      });
+      if (chapters.length >= 2) return { chapters, detected: true };
+    }
+  } catch (e) { /* no usable bookmarks — fall through to text detection */ }
+
+  // 2) Otherwise detect "Chapter …" style lines; 3) failing that, large-font lines.
+  const flat = pageParas.flat();
+  const text = flat.map(p => p.text).join('\n\n');
+  const byWords = splitTextIntoChapters(text);
+  if (byWords.detected) return byWords;
+  const bigIdx = new Set(flat.map((p, i) => (p.big ? i : -1)).filter(i => i !== -1));
+  if (bigIdx.size >= 2 && bigIdx.size <= 200) {
+    const byFont = splitTextIntoChapters(text, bigIdx);
+    if (byFont.detected) return byFont;
+  }
+  return byWords;
+}
+
+async function parseBookFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'epub') {
+    const chapters = (await parseEpubFile(file)).map(c => ({ ...c, title: null }));
+    return { chapters, detected: chapters.length > 1 };
+  }
+  if (ext === 'docx') return parseDocxFile(file);
+  if (ext === 'pdf') return parsePdfFile(file);
+  if (ext === 'txt') return splitTextIntoChapters(await file.text());
+  throw new Error(ext === 'doc' ? 'old .doc Word files can\'t be read — open it in Word and "Save As" .docx' : `.${ext} files aren't supported`);
+}
+
+function describeParsedChapters(result) {
+  const { chapters, detected } = result;
+  const totalChars = chapters.reduce((sum, c) => sum + c.content.length, 0);
+  const names = chapters.slice(0, 6).map(c => escapeHtml(c.label)).join(', ') + (chapters.length > 6 ? `, … +${chapters.length - 6} more` : '');
+  const how = detected
+    ? `Found ${chapters.length} chapter${chapters.length === 1 ? '' : 's'}`
+    : chapters.length > 1
+      ? `No chapter headings found, so the text was split into ${chapters.length} parts`
+      : `No chapter headings found — the whole text will be one chapter`;
+  return `${how} (${totalChars.toLocaleString()} characters): ${names}.`;
+}
+
 bookFileInput.addEventListener('change', async () => {
   const file = bookFileInput.files[0];
   const statusEl = document.getElementById('uploadStatus');
@@ -1690,32 +1926,69 @@ bookFileInput.addEventListener('change', async () => {
   statusEl.style.color = '';
   if (!file) return;
   const ext = file.name.split('.').pop().toLowerCase();
-  const formatNames = { epub: 'EPUB', docx: 'Word Document', pdf: 'PDF' };
-  const formatLabel = formatNames[ext] || ext.toUpperCase();
+  const formatLabel = BOOK_FORMAT_NAMES[ext] || ext.toUpperCase();
   pendingSourceFormat = formatLabel;
   uploadBox.classList.add('has-file');
   document.getElementById('uploadBoxText').textContent = file.name;
 
-  if (ext === 'epub') {
-    statusEl.className = 'upload-status';
-    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Reading chapters from the file…`;
-    try {
-      const chapters = await parseEpubFile(file);
-      if (!chapters.length) throw new Error('no readable chapters found');
-      pendingEpubChapters = chapters;
-      const totalChars = chapters.reduce((sum, c) => sum + c.content.length, 0);
-      statusEl.className = 'upload-status';
-      statusEl.style.color = 'var(--green)';
-      statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Found ${chapters.length} chapter${chapters.length === 1 ? '' : 's'} (${totalChars.toLocaleString()} characters total) — these will be added automatically. Review them afterward with the "Content" button. The box below is optional now.`;
-    } catch (e) {
-      pendingEpubChapters = null;
-      statusEl.className = 'upload-status warn';
-      statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Couldn't read this EPUB automatically (${e.message}). Paste the chapter text into the box below instead.`;
-    }
-  } else {
+  statusEl.className = 'upload-status';
+  statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Reading the book and finding its chapters…`;
+  try {
+    const result = await parseBookFile(file);
+    if (!result.chapters.length) throw new Error('no readable text found');
+    pendingEpubChapters = result.chapters;
+    statusEl.style.color = 'var(--green)';
+    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> ${describeParsedChapters(result)} These will be added automatically when you click "Add Book" — you can rename or fix them afterward with the "Content" button.`;
+  } catch (e) {
+    pendingEpubChapters = null;
     statusEl.className = 'upload-status warn';
-    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Automatic text extraction for ${formatLabel} files isn't built yet. Paste the full book text into the box below.`;
+    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Couldn't read this file automatically (${escapeHtml(e.message)}). You can paste the book's text into the box below instead.`;
   }
+});
+
+const BOOK_FORMAT_NAMES = { epub: 'EPUB', docx: 'Word Document', pdf: 'PDF', txt: 'Text File' };
+
+/* Content window: swap an existing book's chapters for ones read from a file. */
+const replaceChaptersUploadBox = document.getElementById('replaceChaptersUploadBox');
+const replaceChaptersInput = document.getElementById('replaceChaptersInput');
+replaceChaptersUploadBox.addEventListener('click', () => replaceChaptersInput.click());
+replaceChaptersInput.addEventListener('change', async () => {
+  const file = replaceChaptersInput.files[0];
+  const statusEl = document.getElementById('replaceChaptersStatus');
+  replaceChaptersInput.value = '';
+  if (!file || !contentModalBookId) return;
+  const bookId = contentModalBookId;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const formatLabel = BOOK_FORMAT_NAMES[ext] || ext.toUpperCase();
+  statusEl.className = 'upload-status';
+  statusEl.style.color = '';
+  statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Reading the book and finding its chapters…`;
+  let result;
+  try {
+    result = await parseBookFile(file);
+    if (!result.chapters.length) throw new Error('no readable text found');
+  } catch (e) {
+    statusEl.className = 'upload-status warn';
+    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Couldn't read this file automatically (${escapeHtml(e.message)}).`;
+    return;
+  }
+  statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> ${describeParsedChapters(result)}`;
+  if (!confirm(`${result.chapters.length} chapter${result.chapters.length === 1 ? '' : 's'} found in "${file.name}".\n\nReplace ALL of this book's current chapters with these? This can't be undone.`)) {
+    statusEl.innerHTML += ' Not replaced.';
+    return;
+  }
+  const { error: delError } = await sb.from('chapters').delete().eq('book_id', bookId);
+  if (delError) { showToast('Could not replace chapters: ' + delError.message); return; }
+  const rows = result.chapters.map((c, i) => ({ book_id: bookId, position: i + 1, label: c.label, title: c.title || null, content: c.content }));
+  const { error: insError } = await sb.from('chapters').insert(rows);
+  if (insError) { showToast('Old chapters were removed but the new ones failed to save: ' + insError.message); return; }
+  await sb.from('books').update({ source_format: formatLabel }).eq('id', bookId);
+  const book = BOOKS.find(b => b.id === bookId);
+  if (book) book.source_format = formatLabel;
+  statusEl.style.color = 'var(--green)';
+  statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Replaced — the book now has ${rows.length} chapter${rows.length === 1 ? '' : 's'}.`;
+  showToast('Chapters replaced from the file.');
+  if (contentModalBookId === bookId) await loadAndRenderChapters();
 });
 
 const podUploadBox = document.getElementById('podUploadBox');
