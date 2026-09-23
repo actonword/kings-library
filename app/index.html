@@ -1269,16 +1269,33 @@ function bookCardHTML(book) {
   `;
 }
 
+// The library's main languages are always offered, even before a book in them is added;
+// any other language used by a book or podcast is added after them.
+const CORE_LANGUAGES = ['English', 'Hindi', 'Punjabi'];
+
+// Admin types languages freely, so "hindi", " Hindi" and "Hindi" must count as one.
+function normalizeLang(lang) {
+  const s = String(lang || '').trim().replace(/\s+/g, ' ');
+  return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
+}
+
+function matchesLang(itemLang, selected) {
+  return selected === 'all' || normalizeLang(itemLang) === selected;
+}
+
 function populateLangDropdown() {
   const select = document.getElementById('langSelect');
+  const previous = select.value;
   select.querySelectorAll('option:not(:first-child)').forEach(o => o.remove());
-  const langs = [...new Set(BOOKS.map(b => b.lang))].sort();
+  const extra = [...BOOKS, ...PODCASTS].map(x => normalizeLang(x.lang)).filter(l => l && !CORE_LANGUAGES.includes(l));
+  const langs = [...CORE_LANGUAGES, ...[...new Set(extra)].sort()];
   langs.forEach(lang => {
     const opt = document.createElement('option');
     opt.value = lang;
     opt.textContent = lang;
     select.appendChild(opt);
   });
+  if (langs.includes(previous)) select.value = previous;
 }
 
 function getFilteredBooks() {
@@ -1286,8 +1303,7 @@ function getFilteredBooks() {
   const lang = document.getElementById('langSelect').value;
   return BOOKS.filter(b => {
     const matchesQuery = b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q);
-    const matchesLang = lang === 'all' || b.lang === lang;
-    return matchesQuery && matchesLang;
+    return matchesQuery && matchesLang(b.lang, lang);
   });
 }
 
@@ -1878,7 +1894,7 @@ function podcastCardHTML(pod) {
 
 function renderPodcastShelf() {
   const lang = document.getElementById('langSelect').value;
-  const filtered = lang === 'all' ? PODCASTS : PODCASTS.filter(p => p.lang === lang);
+  const filtered = PODCASTS.filter(p => matchesLang(p.lang, lang));
   const shelf = document.getElementById('podcastShelf');
   shelf.innerHTML = filtered.length
     ? filtered.map(podcastCardHTML).join('')
