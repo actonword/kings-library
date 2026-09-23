@@ -820,9 +820,17 @@ document.addEventListener('click', (e) => {
 });
 
 /* ---------- Language pills on homepage ---------- */
+// The library's main languages are always listed; any other language used by a
+// book or podcast is added after them ("hindi" and "Hindi " count as one).
+const CORE_LANGUAGES = ['English', 'Hindi', 'Punjabi'];
+function normalizeLang(lang) {
+  const s = String(lang || '').trim().replace(/\s+/g, ' ');
+  return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
+}
 function renderLangPills() {
-  const langs = [...new Set(BOOKS.map(b => b.lang))].sort();
-  document.getElementById('langPillStrip').innerHTML = langs.map(l => `<span class="lang-pill">${l}</span>`).join('');
+  const extra = [...BOOKS, ...PODCASTS].map(x => normalizeLang(x.lang)).filter(l => l && !CORE_LANGUAGES.includes(l));
+  const langs = [...CORE_LANGUAGES, ...[...new Set(extra)].sort()];
+  document.getElementById('langPillStrip').innerHTML = langs.map(l => `<span class="lang-pill">${escapeSiteText(l)}</span>`).join('');
 }
 
 /* ---------- Browse grid ---------- */
