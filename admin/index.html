@@ -528,6 +528,7 @@
           </div>
         </div>
         <button class="btn btn-gold" onclick="addPodcast()">Add Podcast</button>
+        <button class="btn btn-outline" onclick="addPodcast(true)" title="Saved but hidden from the website and app until you click Publish">Save as Draft</button>
       </div>
 
       <div class="panel-block">
@@ -1381,7 +1382,7 @@ function renderPodcastsTable() {
         <div class="cell-title-wrap">
           <span class="row-cover" style="${p.cover_image_url ? `background-image:url('${p.cover_image_url}');background-size:cover;background-position:center;` : `background:${p.cover_color}`}"></span>
           <div class="cell-title-text">
-            <div class="t-main">${p.title}</div>
+            <div class="t-main">${p.title} ${p.status === 'draft' ? '<span class="badge-draft">Draft — hidden</span>' : ''}</div>
             <div class="t-sub">${p.host}</div>
           </div>
         </div>
@@ -1389,6 +1390,9 @@ function renderPodcastsTable() {
       <td><span class="lang-tag">${p.lang}</span></td>
       <td><input type="number" class="price-input" value="${p.price ?? ''}" placeholder="TBD" data-id="${p.id}" onchange="updatePodPrice('${p.id}', this.value)"></td>
       <td>
+        ${p.status === 'draft'
+          ? `<button class="btn btn-gold btn-tiny" onclick="setPodcastStatus('${p.id}', 'published')">Publish</button>`
+          : `<button class="btn btn-outline btn-tiny" onclick="setPodcastStatus('${p.id}', 'draft')">Unpublish</button>`}
         <button class="btn btn-gold btn-tiny" onclick="openPodModal('${p.id}')">Edit</button>
         <button class="btn btn-danger-outline btn-tiny" onclick="deletePodcast('${p.id}')">Remove</button>
       </td>
@@ -1614,7 +1618,8 @@ async function uploadPodcastAudio(podcastId, file) {
   return path;
 }
 
-async function addPodcast() {
+// asDraft: save the episode hidden from the website and app until "Publish" is clicked.
+async function addPodcast(asDraft = false) {
   const title = document.getElementById('newPodTitle').value.trim();
   const host = document.getElementById('newPodHost').value.trim();
   const lang = document.getElementById('newPodLang').value.trim();
@@ -1648,7 +1653,7 @@ async function addPodcast() {
     cover_color: selectedPodColor,
     cover_image_url: coverImageUrl,
     audio_path: audioPath,
-    status: 'published',
+    status: asDraft ? 'draft' : 'published',
   });
   if (error) { showToast('Could not add podcast: ' + error.message); return; }
 
@@ -1671,7 +1676,24 @@ async function addPodcast() {
   renderPodcastsTable();
   renderGrantPodChecks();
   renderDashboard();
-  showToast(`"${title}" added to Podcasts.`);
+  showToast(asDraft
+    ? `"${title}" saved as a draft — hidden from listeners until you click Publish.`
+    : `"${title}" added to Podcasts.`);
+}
+
+async function setPodcastStatus(id, status) {
+  const pod = PODCASTS.find(p => p.id === id);
+  if (status === 'draft') {
+    const owners = GRANTS.filter(g => g.item_type === 'podcast' && g.item_id === id).length;
+    const warn = owners ? ` ${owners} listener${owners === 1 ? ' owns' : 's own'} it and won't be able to play it while it's a draft.` : '';
+    if (!confirm(`Unpublish "${pod?.title}"? It will be hidden from the website and the app.${warn}`)) return;
+  }
+  const { error } = await sb.from('podcasts').update({ status }).eq('id', id);
+  if (error) { showToast('Could not update podcast: ' + error.message); return; }
+  await loadPodcasts();
+  renderPodcastsTable();
+  renderGrantPodChecks();
+  showToast(status === 'published' ? `"${pod?.title}" is now live on the website and app.` : `"${pod?.title}" is now a draft — hidden from listeners.`);
 }
 
 /* ---------- Podcast edit modal ---------- */
@@ -1808,7 +1830,7 @@ function renderGrantBookChecks() {
 function renderGrantPodChecks() {
   document.getElementById('grantPodChecks').innerHTML = PODCASTS.map(p => `
     <label class="access-check-item">
-      <input type="checkbox" value="${p.id}"> 🎙️ ${p.title}
+      <input type="checkbox" value="${p.id}"> 🎙️ ${p.title}${p.status === 'draft' ? ' (draft)' : ''}
     </label>
   `).join('');
 }
