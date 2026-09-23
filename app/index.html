@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>King's Library</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0A121C">
@@ -580,19 +580,21 @@
     justify-content: center;
     position: relative;
     overflow: hidden;
-    touch-action: pan-y;
+    touch-action: none;
   }
   .page-wrap {
     width: min(640px, 88vw);
     height: min(720px, 82vh);
     position: relative;
+    touch-action: none;
   }
   .page-content {
     height: 100%;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 8px 6px;
+    overflow: hidden;
+    padding: 8px 6px 26px;
     position: relative;
+    box-sizing: border-box;
+    touch-action: none;
   }
   .page-content .chapter-label {
     font-size: 11px;
@@ -620,29 +622,48 @@
   .page-content.devanagari p, .page-content.devanagari .chapter-title { font-family: 'Noto Sans Devanagari', var(--serif); }
   .page-content.gurmukhi p, .page-content.gurmukhi .chapter-title { font-family: 'Noto Sans Gurmukhi', var(--serif); }
 
-  /* Watermark overlay — deterrent, not a full block */
+  /* Watermark — a single discreet credit at the foot of the page, not tiled across it */
   .watermark-layer {
-    position: absolute; inset: 0;
+    position: absolute; left: 0; right: 0; bottom: 2px;
     pointer-events: none;
-    display: flex; flex-wrap: wrap; align-content: space-around; justify-content: space-around;
-    opacity: 0.055;
+    display: flex; justify-content: center; align-items: center;
     z-index: 5;
   }
   .watermark-layer span {
     font-family: var(--sans);
-    font-size: 12px;
+    font-size: 9.5px;
     font-weight: 600;
-    color: #000;
-    transform: rotate(-28deg);
+    letter-spacing: 0.03em;
+    color: var(--text-on-parch-dim);
+    opacity: 0.55;
     white-space: nowrap;
   }
 
   .page-nav-zone {
     position: absolute; top: 0; bottom: 0; width: 15%;
     cursor: pointer; z-index: 4;
+    touch-action: none;
   }
   .page-nav-zone.left { left: 0; }
   .page-nav-zone.right { right: 0; }
+
+  .page-arrow-btn {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(36,30,20,0.06); border: 1px solid rgba(36,30,20,0.1);
+    color: var(--text-on-parch-dim); cursor: pointer; z-index: 6;
+  }
+  .page-arrow-btn:hover { background: rgba(36,30,20,0.1); color: var(--text-on-parch); }
+  .page-arrow-btn:disabled { opacity: 0.25; cursor: default; pointer-events: none; }
+  .page-arrow-btn.prev { left: -4px; }
+  .page-arrow-btn.next { right: -4px; }
+  @media (max-width: 480px) {
+    .page-arrow-btn.prev { left: 4px; }
+    .page-arrow-btn.next { right: 4px; }
+  }
+  .reader-view.dark .page-arrow-btn { background: rgba(220,211,188,0.08); border-color: rgba(220,211,188,0.14); color: #9B927A; }
+  .reader-view.dark .page-arrow-btn:hover { background: rgba(220,211,188,0.14); color: #DCD3BC; }
 
   .reader-footer {
     height: 44px;
@@ -651,10 +672,24 @@
     padding-bottom: 8px;
   }
   .page-indicator { font-size: 11.5px; color: var(--text-on-parch-dim); }
+  .page-progress-wrap { position: relative; width: 200px; height: 14px; display: flex; align-items: center; }
   .progress-track {
-    width: 200px; height: 3px; background: rgba(36,30,20,0.1); border-radius: 2px; overflow: hidden;
+    position: absolute; left: 0; right: 0;
+    height: 3px; background: rgba(36,30,20,0.1); border-radius: 2px; overflow: hidden;
   }
   .progress-track-fill { height: 100%; background: var(--gold); }
+  .page-slider {
+    position: absolute; left: 0; right: 0; width: 100%; height: 100%;
+    margin: 0; -webkit-appearance: none; appearance: none;
+    background: transparent; cursor: pointer;
+  }
+  .page-slider::-webkit-slider-runnable-track { background: transparent; height: 100%; }
+  .page-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--gold); box-shadow: 0 1px 3px rgba(0,0,0,0.3); cursor: pointer;
+  }
+  .page-slider::-moz-range-track { background: transparent; height: 100%; }
+  .page-slider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--gold); border: none; cursor: pointer; }
 
   /* Font size / theme panel */
   .panel {
@@ -690,7 +725,7 @@
   .reader-view.dark .reader-title-mini { color: #DCD3BC; }
   .reader-view.dark .ctrl-btn, .reader-view.dark .back-btn { color: #9B927A; }
   .reader-view.dark .page-content p, .reader-view.dark .chapter-title { color: #DCD3BC; }
-  .reader-view.dark .watermark-layer span { color: #fff; }
+  .reader-view.dark .watermark-layer span { color: #9B927A; }
   .reader-view.dark .page-indicator { color: #9B927A; }
   .reader-view.dark .panel { background: #262420; border-color: rgba(220,211,188,0.1); }
   .reader-view.dark .panel-label { color: #9B927A; }
@@ -965,12 +1000,21 @@
         <div class="page-content" id="pageContent"></div>
         <div class="page-nav-zone left" id="prevZone"></div>
         <div class="page-nav-zone right" id="nextZone"></div>
+        <button class="page-arrow-btn prev" id="arrowPrevBtn" aria-label="Previous page" title="Previous page">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <button class="page-arrow-btn next" id="arrowNextBtn" aria-label="Next page" title="Next page">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
       </div>
     </div>
 
     <div class="reader-footer">
       <span class="page-indicator" id="pageIndicator">Page 1 of 1</span>
-      <div class="progress-track"><div class="progress-track-fill" id="progressFill"></div></div>
+      <div class="page-progress-wrap">
+        <div class="progress-track"><div class="progress-track-fill" id="progressFill"></div></div>
+        <input type="range" class="page-slider" id="pageSlider" min="0" max="0" step="1" value="0" aria-label="Jump to page">
+      </div>
     </div>
   </div>
 
@@ -1270,6 +1314,13 @@ let currentBook = null;
 let currentChapterIdx = 0;
 let fontSize = 17;
 
+/* Real pagination: each chapter's text is split into as many actual pages as it
+   takes to fit the reader's viewport, instead of one long chapter crammed into
+   a single scrolling page. GLOBAL_PAGES is the flattened list of every page in
+   the book; currentPageIdx points into it. */
+let GLOBAL_PAGES = [];
+let currentPageIdx = 0;
+
 async function openBook(id) {
   currentBook = BOOKS.find(b => b.id === id);
   if (!currentBook._chaptersLoaded) {
@@ -1291,7 +1342,9 @@ async function openBook(id) {
   document.getElementById('readerView').classList.add('active');
   document.getElementById('readerTitleMini').textContent = currentBook.title;
   buildWatermark();
-  renderPage();
+  paginateBook();
+  currentPageIdx = findPageIndexForAnchor({ chapterIdx: currentChapterIdx, firstPara: null });
+  renderCurrentPage();
 }
 
 function closeBook() {
@@ -1302,15 +1355,12 @@ document.getElementById('backBtn').addEventListener('click', closeBook);
 
 function buildWatermark() {
   const layer = document.getElementById('watermarkLayer');
-  const label = `${READER_NAME} · ${SESSION_ID}`;
-  let html = '';
-  for (let i = 0; i < 18; i++) html += `<span>${label}</span>`;
-  layer.innerHTML = html;
+  layer.innerHTML = `<span>${READER_NAME} · ${SESSION_ID}</span>`;
 }
 
 async function saveReadingProgress() {
   if (!currentReader || !currentBook) return;
-  const percent = Math.round(((currentChapterIdx + 1) / currentBook.chapters.length) * 100);
+  const percent = GLOBAL_PAGES.length > 1 ? Math.round((currentPageIdx / (GLOBAL_PAGES.length - 1)) * 100) : 100;
   currentBook.progress = percent;
   currentBook._resumeChapterPosition = currentChapterIdx;
   await sb.from('reading_progress').upsert(
@@ -1319,29 +1369,206 @@ async function saveReadingProgress() {
   );
 }
 
-function renderPage() {
-  const ch = currentBook.chapters[currentChapterIdx];
+/* ---------- Pagination engine ---------- */
+function getPageMeasurer() {
+  let el = document.getElementById('pageMeasurer');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'pageMeasurer';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function preparePageMeasurer() {
+  const real = document.getElementById('pageContent');
+  const wrapRect = document.querySelector('.page-wrap').getBoundingClientRect();
+  const el = getPageMeasurer();
+  el.className = real.className;
+  el.style.position = 'fixed';
+  el.style.visibility = 'hidden';
+  el.style.pointerEvents = 'none';
+  el.style.left = '-99999px';
+  el.style.top = '0';
+  el.style.width = wrapRect.width + 'px';
+  el.style.height = wrapRect.height + 'px';
+  el.style.fontSize = fontSize + 'px';
+  el.innerHTML = '';
+  return el;
+}
+
+function measurerFits(el) {
+  return el.scrollHeight <= el.clientHeight + 1;
+}
+
+/* A single paragraph that's too tall to fit on any one page (rare) gets split by words. */
+function splitLongParagraph(el, text) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const chunks = [];
+  let current = '';
+  const p = document.createElement('p');
+  el.appendChild(p);
+  for (const w of words) {
+    const attempt = current ? current + ' ' + w : w;
+    p.textContent = attempt;
+    if (!measurerFits(el) && current) {
+      chunks.push(current);
+      current = w;
+      p.textContent = current;
+    } else {
+      current = attempt;
+    }
+  }
+  if (current) chunks.push(current);
+  el.removeChild(p);
+  return chunks.length ? chunks : [text];
+}
+
+function paginateBook() {
+  // Set the language/script class before measuring — pagination must use the same
+  // font metrics the page will actually render with, not whatever book was open before.
+  document.getElementById('pageContent').className = 'page-content' + (currentBook.rtl ? ' rtl' : '') + (currentBook.devanagari ? ' devanagari' : '') + (currentBook.gurmukhi ? ' gurmukhi' : '');
+  const el = preparePageMeasurer();
+  const pages = [];
+
+  for (let chapterIdx = 0; chapterIdx < currentBook.chapters.length; chapterIdx++) {
+    const ch = currentBook.chapters[chapterIdx];
+    const paras = ch.paras.length ? ch.paras : [''];
+
+    let pageParas = [];
+    let pageHasHeader = true;
+
+    const startFreshPage = (withHeader) => {
+      el.innerHTML = '';
+      if (withHeader) {
+        if (ch.label) { const d = document.createElement('div'); d.className = 'chapter-label'; d.textContent = ch.label; el.appendChild(d); }
+        if (ch.title) { const d = document.createElement('div'); d.className = 'chapter-title'; d.textContent = ch.title; el.appendChild(d); }
+      }
+    };
+    const pushPage = () => {
+      pages.push({ chapterIdx, label: pageHasHeader ? (ch.label || '') : '', title: pageHasHeader ? (ch.title || '') : '', paras: pageParas });
+    };
+
+    startFreshPage(true);
+
+    for (let pi = 0; pi < paras.length; pi++) {
+      const text = paras[pi];
+      const p = document.createElement('p');
+      p.textContent = text;
+      el.appendChild(p);
+
+      if (measurerFits(el)) {
+        pageParas.push(text);
+        continue;
+      }
+
+      el.removeChild(p);
+      pushPage();
+      pageParas = [];
+      pageHasHeader = false;
+      startFreshPage(false);
+
+      el.appendChild(p);
+      if (measurerFits(el)) {
+        pageParas.push(text);
+      } else {
+        el.removeChild(p);
+        const chunks = splitLongParagraph(el, text);
+        chunks.forEach((chunk, ci) => {
+          const cp = document.createElement('p');
+          cp.textContent = chunk;
+          el.appendChild(cp);
+          pageParas.push(chunk);
+          if (ci < chunks.length - 1) {
+            pushPage();
+            pageParas = [];
+            pageHasHeader = false;
+            startFreshPage(false);
+          }
+        });
+      }
+    }
+    pushPage();
+  }
+
+  GLOBAL_PAGES = pages;
+}
+
+function currentPageAnchor() {
+  const page = GLOBAL_PAGES[currentPageIdx];
+  if (!page) return null;
+  return { chapterIdx: page.chapterIdx, firstPara: page.paras[0] ?? null };
+}
+
+function findPageIndexForAnchor(anchor) {
+  if (!anchor || !GLOBAL_PAGES.length) return 0;
+  const chapterStart = GLOBAL_PAGES.findIndex(pg => pg.chapterIdx === anchor.chapterIdx);
+  if (chapterStart === -1) return 0;
+  if (anchor.firstPara != null) {
+    const exact = GLOBAL_PAGES.findIndex(pg => pg.chapterIdx === anchor.chapterIdx && pg.paras.includes(anchor.firstPara));
+    if (exact !== -1) return exact;
+  }
+  return chapterStart;
+}
+
+function repaginateKeepingPlace() {
+  const anchor = currentPageAnchor();
+  paginateBook();
+  currentPageIdx = findPageIndexForAnchor(anchor);
+  renderCurrentPage();
+}
+
+function renderCurrentPage() {
+  const page = GLOBAL_PAGES[currentPageIdx];
+  if (!page) return;
+  currentChapterIdx = page.chapterIdx;
   const content = document.getElementById('pageContent');
   content.className = 'page-content' + (currentBook.rtl ? ' rtl' : '') + (currentBook.devanagari ? ' devanagari' : '') + (currentBook.gurmukhi ? ' gurmukhi' : '');
   content.style.fontSize = fontSize + 'px';
   content.innerHTML = `
-    <div class="chapter-label">${ch.label}</div>
-    <div class="chapter-title">${ch.title}</div>
-    ${ch.paras.map(p => `<p>${p}</p>`).join('')}
+    ${page.label ? `<div class="chapter-label">${page.label}</div>` : ''}
+    ${page.title ? `<div class="chapter-title">${page.title}</div>` : ''}
+    ${page.paras.map(t => `<p>${t}</p>`).join('')}
   `;
-  document.getElementById('pageIndicator').textContent = `Page ${currentChapterIdx + 1} of ${currentBook.chapters.length}`;
-  const pct = ((currentChapterIdx + 1) / currentBook.chapters.length) * 100;
+  document.getElementById('pageIndicator').textContent = `Page ${currentPageIdx + 1} of ${GLOBAL_PAGES.length}`;
+  const pct = GLOBAL_PAGES.length > 1 ? (currentPageIdx / (GLOBAL_PAGES.length - 1)) * 100 : 100;
   document.getElementById('progressFill').style.width = pct + '%';
+  const slider = document.getElementById('pageSlider');
+  slider.max = Math.max(0, GLOBAL_PAGES.length - 1);
+  slider.value = currentPageIdx;
+  document.getElementById('arrowPrevBtn').disabled = currentPageIdx <= 0;
+  document.getElementById('arrowNextBtn').disabled = currentPageIdx >= GLOBAL_PAGES.length - 1;
   saveReadingProgress();
 }
 
-document.getElementById('prevZone').addEventListener('click', () => {
-  if (currentChapterIdx > 0) { currentChapterIdx--; renderPage(); }
+function goPrevPage() {
+  if (currentPageIdx > 0) { currentPageIdx--; renderCurrentPage(); }
   else showToast("This is the first page.");
-});
-document.getElementById('nextZone').addEventListener('click', () => {
-  if (currentChapterIdx < currentBook.chapters.length - 1) { currentChapterIdx++; renderPage(); }
+}
+function goNextPage() {
+  if (currentPageIdx < GLOBAL_PAGES.length - 1) { currentPageIdx++; renderCurrentPage(); }
   else showToast("You've reached the end of this book.");
+}
+
+document.getElementById('prevZone').addEventListener('click', goPrevPage);
+document.getElementById('nextZone').addEventListener('click', goNextPage);
+document.getElementById('arrowPrevBtn').addEventListener('click', goPrevPage);
+document.getElementById('arrowNextBtn').addEventListener('click', goNextPage);
+document.getElementById('pageSlider').addEventListener('input', (e) => {
+  currentPageIdx = Number(e.target.value);
+  renderCurrentPage();
+});
+document.addEventListener('keydown', (e) => {
+  if (!document.getElementById('readerView').classList.contains('active')) return;
+  if (e.key === 'ArrowLeft') goPrevPage();
+  else if (e.key === 'ArrowRight') goNextPage();
+});
+
+let resizeRepaginateTimer = null;
+window.addEventListener('resize', () => {
+  if (!currentBook || !document.getElementById('readerView').classList.contains('active')) return;
+  clearTimeout(resizeRepaginateTimer);
+  resizeRepaginateTimer = setTimeout(repaginateKeepingPlace, 200);
 });
 
 /* Settings panel */
@@ -1350,10 +1577,12 @@ const settingsPanel = document.getElementById('settingsPanel');
 settingsBtn.addEventListener('click', (e) => { e.stopPropagation(); settingsPanel.classList.toggle('open'); });
 document.addEventListener('click', (e) => { if (!settingsPanel.contains(e.target) && e.target !== settingsBtn) settingsPanel.classList.remove('open'); });
 
-document.getElementById('fontPlus').addEventListener('click', () => { fontSize = Math.min(24, fontSize + 1); renderPage(); });
-document.getElementById('fontMinus').addEventListener('click', () => { fontSize = Math.max(13, fontSize - 1); renderPage(); });
+document.getElementById('fontPlus').addEventListener('click', () => { fontSize = Math.min(24, fontSize + 1); repaginateKeepingPlace(); });
+document.getElementById('fontMinus').addEventListener('click', () => { fontSize = Math.max(13, fontSize - 1); repaginateKeepingPlace(); });
 
-/* Pinch-to-zoom: two-finger pinch on the page changes text size, like a real reading app */
+/* Pinch-to-zoom: two-finger pinch on the page changes text size, like a real reading app.
+   The browser's own page-zoom is disabled (see the viewport meta tag) so this custom
+   gesture always gets the touch events instead of being hijacked by native zoom. */
 const pageStage = document.getElementById('pageStage') || document.querySelector('.page-stage');
 let pinchStartDist = null;
 let pinchStartFontSize = fontSize;
@@ -1380,13 +1609,18 @@ pageStage.addEventListener('touchmove', (e) => {
     newSize = Math.max(13, Math.min(30, newSize));
     if (newSize !== fontSize) {
       fontSize = newSize;
-      renderPage();
+      // Live preview only — full repagination on touchend avoids re-measuring the
+      // whole book on every touch-move frame, which would feel janky mid-pinch.
+      document.getElementById('pageContent').style.fontSize = fontSize + 'px';
     }
   }
 }, { passive: false });
 
 pageStage.addEventListener('touchend', (e) => {
-  if (e.touches.length < 2) pinchStartDist = null;
+  if (e.touches.length < 2) {
+    if (pinchStartDist) repaginateKeepingPlace();
+    pinchStartDist = null;
+  }
 });
 
 document.querySelectorAll('.theme-dot').forEach(dot => {
