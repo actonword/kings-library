@@ -1272,10 +1272,193 @@ async function deletePodcast(id) {
   showToast(`"${pod?.title}" removed from Podcasts${count ? ` and access revoked for ${count} reader${count === 1 ? '' : 's'}` : ''}.`);
 }
 
+/* Streaming-style (fragmented / DASH) .m4a → ordinary .m4a.
+   Audio saved from YouTube and similar sites is often "fragmented" MP4: the sound is
+   split into many moof+mdat pieces. Desktop Chrome plays that, but iPhones and many
+   Android phones won't in a plain <audio> player. This repackages the same audio
+   samples (no re-encoding, no quality change) into a regular MP4 with the index at the
+   front. Returns null when the file isn't fragmented and needs no change. */
+function defragmentMp4Audio(input) {
+  const buf = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const u32 = (o) => dv.getUint32(o);
+  const u64 = (o) => dv.getUint32(o) * 4294967296 + dv.getUint32(o + 4);
+  const typeAt = (o) => String.fromCharCode(buf[o], buf[o + 1], buf[o + 2], buf[o + 3]);
+
+  const readBoxes = (start, end) => {
+    const out = [];
+    let o = start;
+    while (o + 8 <= end) {
+      let size = u32(o), hdr = 8;
+      if (size === 1) { size = u64(o + 8); hdr = 16; }
+      else if (size === 0) size = end - o;
+      if (size < hdr || o + size > end) break;
+      out.push({ type: typeAt(o + 4), start: o, size, body: o + hdr, end: o + size });
+      o += size;
+    }
+    return out;
+  };
+  const child = (box, type) => box && readBoxes(box.body, box.end).find(b => b.type === type);
+  const path = (box, ...types) => types.reduce((b, t) => child(b, t), box);
+
+  const top = readBoxes(0, buf.length);
+  const moov = top.find(b => b.type === 'moov');
+  if (!moov || !top.some(b => b.type === 'moof')) return null;
+
+  const traks = readBoxes(moov.body, moov.end).filter(b => b.type === 'trak');
+  if (traks.length !== 1) throw new Error('this audio file has an unusual layout (more than one track)');
+  const trak = traks[0];
+  const tkhd = child(trak, 'tkhd');
+  const trackId = u32(tkhd.body + (buf[tkhd.body] === 1 ? 20 : 12));
+  const mdia = child(trak, 'mdia');
+  const mdhd = child(mdia, 'mdhd');
+  const stbl = path(mdia, 'minf', 'stbl');
+  const stsd = child(stbl, 'stsd');
+  if (!stsd) throw new Error('audio format information is missing');
+
+  // Per-track defaults from moov/mvex/trex.
+  let trex = { dur: 0, size: 0 };
+  const mvex = child(moov, 'mvex');
+  if (mvex) {
+    for (const t of readBoxes(mvex.body, mvex.end).filter(b => b.type === 'trex')) {
+      if (u32(t.body + 4) === trackId) trex = { dur: u32(t.body + 12), size: u32(t.body + 16) };
+    }
+  }
+
+  // Walk every fragment and collect each sample's byte range and duration.
+  const chunks = []; // { samples: [{ off, size, dur }] }
+  for (const moof of top.filter(b => b.type === 'moof')) {
+    for (const traf of readBoxes(moof.body, moof.end).filter(b => b.type === 'traf')) {
+      const tfhd = child(traf, 'tfhd');
+      const tf = u32(tfhd.body) & 0xffffff;
+      if (u32(tfhd.body + 4) !== trackId) continue;
+      let p = tfhd.body + 8;
+      let base = moof.start;
+      if (tf & 0x1) { base = u64(p); p += 8; }
+      if (tf & 0x2) p += 4;
+      let defDur = trex.dur, defSize = trex.size;
+      if (tf & 0x8) { defDur = u32(p); p += 4; }
+      if (tf & 0x10) { defSize = u32(p); p += 4; }
+      let cursor = null;
+      for (const trun of readBoxes(traf.body, traf.end).filter(b => b.type === 'trun')) {
+        const rf = u32(trun.body) & 0xffffff;
+        const count = u32(trun.body + 4);
+        let q = trun.body + 8;
+        if (rf & 0x1) { cursor = base + dv.getInt32(q); q += 4; }
+        else if (cursor === null) cursor = base;
+        if (rf & 0x4) q += 4;
+        const samples = [];
+        for (let i = 0; i < count; i++) {
+          let dur = defDur, size = defSize;
+          if (rf & 0x100) { dur = u32(q); q += 4; }
+          if (rf & 0x200) { size = u32(q); q += 4; }
+          if (rf & 0x400) q += 4;
+          if (rf & 0x800) q += 4;
+          if (cursor + size > buf.length) throw new Error('the audio file looks cut off or damaged');
+          samples.push({ off: cursor, size, dur });
+          cursor += size;
+        }
+        if (samples.length) chunks.push({ samples });
+      }
+    }
+  }
+  const allSamples = chunks.flatMap(c => c.samples);
+  if (!allSamples.length) throw new Error('no audio found in this file');
+  const mediaDuration = allSamples.reduce((s, x) => s + x.dur, 0);
+
+  // ---- write helpers ----
+  const cat = (parts) => {
+    const len = parts.reduce((s, p) => s + p.length, 0);
+    const out = new Uint8Array(len);
+    let o = 0;
+    for (const p of parts) { out.set(p, o); o += p.length; }
+    return out;
+  };
+  const be32 = (n) => { const a = new Uint8Array(4); new DataView(a.buffer).setUint32(0, n); return a; };
+  const str = (s) => Uint8Array.from(s, c => c.charCodeAt(0));
+  const box = (type, ...parts) => { const body = cat(parts); return cat([be32(body.length + 8), str(type), body]); };
+  const full = (type, version, flags, ...parts) => box(type, be32((version << 24) | flags), ...parts);
+  const raw = (b) => buf.slice(b.start, b.end);
+  const words = (arr) => { const a = new Uint8Array(arr.length * 4); const d = new DataView(a.buffer); arr.forEach((n, i) => d.setUint32(i * 4, n)); return a; };
+
+  // Copy a *hd box with its duration field replaced (mvhd/mdhd: after timescale; tkhd: after reserved).
+  const withDuration = (b, duration, kind) => {
+    const copy = raw(b);
+    const d = new DataView(copy.buffer);
+    const hdr = b.body - b.start;
+    const v1 = copy[hdr] === 1;
+    const off = hdr + (kind === 'tkhd' ? (v1 ? 28 : 20) : (v1 ? 24 : 16));
+    if (v1) { d.setUint32(off, Math.floor(duration / 4294967296)); d.setUint32(off + 4, duration >>> 0); }
+    else d.setUint32(off, Math.min(duration, 0xffffffff));
+    return copy;
+  };
+  const timescaleOf = (b) => u32(b.body + (buf[b.body] === 1 ? 20 : 12));
+
+  const mvhd = child(moov, 'mvhd');
+  const movieDuration = Math.round(mediaDuration * timescaleOf(mvhd) / timescaleOf(mdhd));
+
+  // Sample tables.
+  const sttsEntries = [];
+  for (const s of allSamples) {
+    const last = sttsEntries[sttsEntries.length - 1];
+    if (last && last[1] === s.dur) last[0]++;
+    else sttsEntries.push([1, s.dur]);
+  }
+  const stscEntries = [];
+  chunks.forEach((c, i) => {
+    const last = stscEntries[stscEntries.length - 1];
+    if (!last || last[1] !== c.samples.length) stscEntries.push([i + 1, c.samples.length, 1]);
+  });
+  const stts = full('stts', 0, 0, be32(sttsEntries.length), words(sttsEntries.flat()));
+  const stsc = full('stsc', 0, 0, be32(stscEntries.length), words(stscEntries.flat()));
+  const stsz = full('stsz', 0, 0, be32(0), be32(allSamples.length), words(allSamples.map(s => s.size)));
+
+  const mdatSize = allSamples.reduce((s, x) => s + x.size, 0);
+  const buildMoov = (chunkOffsets) => {
+    const stco = full('stco', 0, 0, be32(chunkOffsets.length), words(chunkOffsets));
+    const newStbl = box('stbl', raw(stsd), stts, stsc, stsz, stco);
+    const minf = path(mdia, 'minf');
+    const newMinf = box('minf', ...readBoxes(minf.body, minf.end).map(b => (b.type === 'stbl' ? newStbl : raw(b))));
+    const newMdia = box('mdia', ...readBoxes(mdia.body, mdia.end).map(b => (b.type === 'mdhd' ? withDuration(b, mediaDuration, 'mdhd') : b.type === 'minf' ? newMinf : raw(b))));
+    const newTrak = box('trak', ...readBoxes(trak.body, trak.end).map(b => (b.type === 'tkhd' ? withDuration(b, movieDuration, 'tkhd') : b.type === 'mdia' ? newMdia : raw(b))));
+    return box('moov', ...readBoxes(moov.body, moov.end)
+      .filter(b => b.type !== 'mvex')
+      .map(b => (b.type === 'mvhd' ? withDuration(b, movieDuration, 'mvhd') : b.type === 'trak' ? newTrak : raw(b))));
+  };
+
+  const ftyp = box('ftyp', str('M4A '), be32(0), str('M4A '), str('mp42'), str('isom'));
+  const moovSize = buildMoov(chunks.map(() => 0)).length; // offsets don't change the size
+  const dataStart = ftyp.length + moovSize + 8;
+  if (dataStart + mdatSize > 0xffffffff) throw new Error('this audio file is too large (over 4 GB)');
+  let pos = dataStart;
+  const offsets = chunks.map(c => { const o = pos; pos += c.samples.reduce((s, x) => s + x.size, 0); return o; });
+  const newMoov = buildMoov(offsets);
+
+  const out = new Uint8Array(dataStart + mdatSize);
+  out.set(ftyp, 0);
+  out.set(newMoov, ftyp.length);
+  new DataView(out.buffer).setUint32(ftyp.length + newMoov.length, mdatSize + 8);
+  out.set(str('mdat'), ftyp.length + newMoov.length + 4);
+  let w = dataStart;
+  for (const s of allSamples) { out.set(buf.subarray(s.off, s.off + s.size), w); w += s.size; }
+  return out;
+}
+
+const AUDIO_CONTENT_TYPES = { mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav' };
+
 async function uploadPodcastAudio(podcastId, file) {
   const ext = file.name.split('.').pop().toLowerCase();
   const path = `${podcastId}/audio.${ext}`;
-  const { error } = await sb.storage.from('podcast-audio').upload(path, file, { upsert: true });
+  let body = file;
+  if (ext === 'm4a') {
+    // Streaming-style .m4a (e.g. saved from YouTube) won't play on phones — repackage it first.
+    const fixed = defragmentMp4Audio(await file.arrayBuffer());
+    if (fixed) body = new Blob([fixed], { type: 'audio/mp4' });
+  }
+  const { error } = await sb.storage.from('podcast-audio').upload(path, body, {
+    upsert: true,
+    contentType: AUDIO_CONTENT_TYPES[ext] || file.type || 'application/octet-stream',
+  });
   if (error) throw error;
   return path;
 }
