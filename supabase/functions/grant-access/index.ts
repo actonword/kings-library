@@ -16,6 +16,8 @@ Deno.serve(async (req) => {
   const displayName: string | undefined = body?.displayName?.trim();
   const bookIds: string[] = Array.isArray(body?.bookIds) ? body.bookIds : [];
   const podcastIds: string[] = Array.isArray(body?.podcastIds) ? body.podcastIds : [];
+  // A free gift is recorded with price_paid = 0 so it doesn't count as revenue.
+  const isGift: boolean = body?.gift === true;
 
   if (!email || !email.includes("@")) {
     return jsonResponse({ error: "A valid email is required" }, 400);
@@ -59,14 +61,33 @@ Deno.serve(async (req) => {
     if (profileErr) return jsonResponse({ error: profileErr.message }, 500);
   }
 
+  // Price at the moment of granting (the item's current price), unless it's a gift.
+  const priceOf: Record<string, number> = {};
+  if (!isGift) {
+    if (bookIds.length) {
+      const { data } = await admin.from("books").select("id, price").in("id", bookIds);
+      (data ?? []).forEach((b) => (priceOf[b.id] = Number(b.price) || 0));
+    }
+    if (podcastIds.length) {
+      const { data } = await admin.from("podcasts").select("id, price").in("id", podcastIds);
+      (data ?? []).forEach((p) => (priceOf[p.id] = Number(p.price) || 0));
+    }
+  }
+
   const grantRows = [
-    ...bookIds.map((id) => ({ reader_id: readerId, item_type: "book", item_id: id, granted_by: adminProfile!.id })),
-    ...podcastIds.map((id) => ({ reader_id: readerId, item_type: "podcast", item_id: id, granted_by: adminProfile!.id })),
+    ...bookIds.map((id) => ({ reader_id: readerId, item_type: "book", item_id: id, granted_by: adminProfile!.id, price_paid: priceOf[id] ?? 0 })),
+    ...podcastIds.map((id) => ({ reader_id: readerId, item_type: "podcast", item_id: id, granted_by: adminProfile!.id, price_paid: priceOf[id] ?? 0 })),
   ];
 
-  const { error: grantErr } = await admin
+  let { error: grantErr } = await admin
     .from("access_grants")
     .upsert(grantRows, { onConflict: "reader_id,item_type,item_id", ignoreDuplicates: true });
+  if (grantErr && /price_paid/.test(grantErr.message)) {
+    // Database not yet migrated (0012) — grant without recording the price.
+    ({ error: grantErr } = await admin
+      .from("access_grants")
+      .upsert(grantRows.map(({ price_paid: _p, ...row }) => row), { onConflict: "reader_id,item_type,item_id", ignoreDuplicates: true }));
+  }
   if (grantErr) return jsonResponse({ error: grantErr.message }, 500);
 
   // Look up titles for the activity log + email.
@@ -81,7 +102,7 @@ Deno.serve(async (req) => {
   }
 
   await admin.from("activity_log").insert({
-    body: `Granted ${titles.map((t) => `<strong>${t}</strong>`).join(", ")} to <strong>${email}</strong>.`,
+    body: `Granted ${titles.map((t) => `<strong>${t}</strong>`).join(", ")} to <strong>${email}</strong>${isGift ? " (free gift)" : ""}.`,
   });
 
   await sendEmail(

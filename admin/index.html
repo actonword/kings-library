@@ -142,6 +142,28 @@
 
   .lang-tag { font-size: 10.5px; color: var(--gold-bright); border: 1px solid rgba(212,175,106,0.35); border-radius: 20px; padding: 2px 8px; }
   .badge-owned { font-size: 10.5px; color: var(--green); border: 1px solid rgba(92,158,107,0.4); border-radius: 20px; padding: 2px 8px; }
+  /* Chapter preview — mirrors the reader app's page styles (app/index.html .page-content) */
+  .chapter-preview {
+    background: #F4ECDA; color: #241E14; border-radius: 6px; padding: 22px 24px; margin: 10px 0;
+    max-height: 420px; overflow-y: auto; font-family: var(--serif); font-size: 16px;
+  }
+  .chapter-preview .pv-note { font-family: var(--sans, sans-serif); font-size: 11px; color: #7A6F58; margin-bottom: 14px; }
+  .chapter-preview .pv-label { font-size: 13px; letter-spacing: 0.06em; color: #C79A42; margin-bottom: 10px; font-weight: 700; text-align: center; }
+  .chapter-preview .pv-title { font-size: 22px; font-weight: 700; margin-bottom: 18px; line-height: 1.3; text-align: center; }
+  .chapter-preview p { line-height: 1.75; margin-bottom: 14px; text-align: justify; hyphens: auto; }
+  .chapter-preview p.pf-center { text-align: center; text-align-last: center; }
+  .chapter-preview p.pf-right { text-align: right; }
+  .chapter-preview p.pf-left { text-align: start; }
+  .chapter-preview p.pf-justify { text-align: justify; }
+  .chapter-preview p.pf-indent { text-indent: 1.6em; }
+  .chapter-preview p.pf-inset { margin-left: 2em; margin-right: 2em; }
+  .chapter-preview p.pf-tight { margin-bottom: 0; }
+  .chapter-preview b { font-weight: 700; }
+  .badge-draft { font-size: 10px; font-weight: 600; color: var(--gold-bright); border: 1px solid rgba(240,194,94,0.45); border-radius: 20px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; white-space: nowrap; }
+  .owned-item { display: inline-flex; align-items: center; gap: 4px; margin: 0 4px 4px 0; }
+  .owned-progress { color: var(--text-on-ink-dim); }
+  .owned-remove { background: none; border: none; color: var(--text-on-ink-dim); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 0 0 2px; }
+  .owned-remove:hover { color: var(--red); }
   .badge-locked { font-size: 10.5px; color: var(--text-on-ink-dim); border: 1px solid rgba(233,226,208,0.14); border-radius: 20px; padding: 2px 8px; }
 
   /* ---------- Forms ---------- */
@@ -320,7 +342,7 @@
       <div class="stat-grid">
         <div class="stat-card"><div class="stat-label">Total Books</div><div class="stat-value" id="statBooks">0</div></div>
         <div class="stat-card"><div class="stat-label">Total Readers</div><div class="stat-value" id="statReaders">0</div></div>
-        <div class="stat-card"><div class="stat-label">Books Sold</div><div class="stat-value" id="statSold">0</div></div>
+        <div class="stat-card"><div class="stat-label">Items Sold (books &amp; podcasts)</div><div class="stat-value" id="statSold">0</div></div>
         <div class="stat-card"><div class="stat-label">Total Revenue</div><div class="stat-value" id="statRevenue">₹0</div></div>
       </div>
       <div class="panel-block">
@@ -367,6 +389,7 @@
         </div>
         <div id="addBookError" style="display:none; color:var(--red); font-weight:600; font-size:12.5px; background:rgba(196,87,74,0.1); border:1px solid rgba(196,87,74,0.3); border-radius:6px; padding:10px 12px; margin-bottom:12px;"></div>
         <button class="btn btn-gold" onclick="addBook()">Add Book</button>
+        <button class="btn btn-outline" onclick="addBook(true)" title="Saved but hidden from the website and app until you click Publish">Save as Draft</button>
       </div>
 
       <div class="panel-block">
@@ -523,7 +546,7 @@
       <div class="panel-block">
         <h3>Grant Access to a Reader</h3>
         <div class="form-grid">
-          <div class="form-field full"><label>Reader's registered email</label><input type="email" id="grantEmail" placeholder="reader@example.com"></div>
+          <div class="form-field full"><label>Reader's email (start typing to pick an existing reader)</label><input type="email" id="grantEmail" placeholder="reader@example.com" list="readerEmailList" autocomplete="off"><datalist id="readerEmailList"></datalist></div>
           <div class="form-field full">
             <label>Books to grant</label>
             <div class="access-checks" id="grantBookChecks"></div>
@@ -532,14 +555,18 @@
             <label>Podcasts to grant</label>
             <div class="access-checks" id="grantPodChecks"></div>
           </div>
+          <div class="form-field full">
+            <label class="access-check-item" style="display:inline-flex;"><input type="checkbox" id="grantIsGift"> Free gift — don't count this as a sale in revenue</label>
+          </div>
         </div>
         <button class="btn btn-gold" onclick="grantAccess()">Grant Access &amp; Send App + OTP</button>
       </div>
 
       <div class="panel-block">
         <h3>All Readers</h3>
+        <div class="form-field" style="max-width:360px;margin-bottom:14px;"><input type="search" id="readerSearch" placeholder="Search by email, name or title…" oninput="renderReadersTable()"></div>
         <table>
-          <thead><tr><th>Email</th><th>Books Owned</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Reader</th><th>Joined</th><th>Last active</th><th>Owns (× removes one item)</th><th>Actions</th></tr></thead>
           <tbody id="readersTableBody"></tbody>
         </table>
       </div>
@@ -547,7 +574,7 @@
 
     <!-- ACCESS LOG -->
     <div id="logView" class="view">
-      <div class="page-head"><h1>Access Log</h1><p>A simulated record of app links and OTPs sent to readers. Real email sending connects here once the backend is built.</p></div>
+      <div class="page-head"><h1>Access Log</h1><p>A record of everything done for readers: access granted (with the app-link email sent), access revoked, and notifications sent. Newest first.</p></div>
       <div class="panel-block">
         <div id="fullLog"></div>
       </div>
@@ -555,7 +582,7 @@
 
     <!-- NOTIFICATIONS -->
     <div id="notifyView" class="view">
-      <div class="page-head"><h1>Send Notification</h1><p>Let readers know when a new book arrives. This is a demo of the screen — real sending needs the backend.</p></div>
+      <div class="page-head"><h1>Send Notification</h1><p>Let readers know when a new book arrives. Each notification appears in readers' app (bell icon), is also emailed to them, and is logged in the Access Log.</p></div>
 
       <div class="panel-block">
         <h3>New Notification</h3>
@@ -642,7 +669,7 @@
 
       <div class="panel-block">
         <h3>Legal Pages</h3>
-        <p style="font-size:11.5px;color:var(--text-on-ink-dim);margin-bottom:14px;">Shown at the bottom of every page via "Terms &amp; Conditions" / "Privacy Policy" links. Leave a blank line between paragraphs. These were seeded with a starting draft — have it reviewed before you rely on it.</p>
+        <p style="font-size:11.5px;color:var(--text-on-ink-dim);margin-bottom:14px;">Shown at the bottom of every website page via the "Terms &amp; Conditions", "Privacy Policy", "Refund &amp; Cancellation Policy" and "Delivery Policy" links (the "Contact Us" page is built from Contact Details above). Leave a blank line between paragraphs. These were seeded with a starting draft — have it reviewed before you rely on it.</p>
         <div class="form-grid">
           <div class="form-field full"><label>Terms &amp; Conditions</label><textarea id="settingsTermsText" style="min-height:160px;"></textarea></div>
           <div class="form-field full"><label>Privacy Policy</label><textarea id="settingsPrivacyText" style="min-height:160px;"></textarea></div>
@@ -762,23 +789,58 @@ async function loadPodcasts() {
   PODCASTS = data;
 }
 
+let GRANTS = [];
+
+// What was charged for a grant. Grants made before prices were recorded fall back to
+// the item's current price (what the dashboard used to assume for everything).
+function grantPricePaid(g) {
+  if (g.price_paid != null) return Number(g.price_paid) || 0;
+  const item = g.item_type === 'book' ? BOOKS.find(b => b.id === g.item_id) : PODCASTS.find(p => p.id === g.item_id);
+  return Number(item?.price) || 0;
+}
+
 async function loadReaders() {
-  const { data: profiles, error: pErr } = await sb.from('profiles').select('id,email').eq('role', 'reader');
+  const { data: profiles, error: pErr } = await sb.from('profiles').select('id,email,display_name,created_at').eq('role', 'reader');
   if (pErr) { showToast('Could not load readers: ' + pErr.message); return; }
-  const { data: grants, error: gErr } = await sb.from('access_grants').select('reader_id,item_type,item_id');
+  let { data: grants, error: gErr } = await sb.from('access_grants').select('reader_id,item_type,item_id,granted_at,price_paid');
+  if (gErr && /price_paid/.test(gErr.message)) {
+    // Database not yet migrated (0012) — load grants without recorded prices.
+    ({ data: grants, error: gErr } = await sb.from('access_grants').select('reader_id,item_type,item_id,granted_at'));
+  }
   if (gErr) { showToast('Could not load access grants: ' + gErr.message); return; }
+  GRANTS = grants || [];
+  const { data: bookProgress } = await sb.from('reading_progress').select('reader_id,book_id,percent,updated_at');
+  const { data: podProgress } = await sb.from('podcast_progress').select('reader_id,podcast_id,position_sec,updated_at');
+
   READERS = (profiles || []).map(p => {
-    const own = (grants || []).filter(g => g.reader_id === p.id);
-    const bookIds = own.filter(g => g.item_type === 'book').map(g => g.item_id);
-    const podIds = own.filter(g => g.item_type === 'podcast').map(g => g.item_id);
+    const own = GRANTS.filter(g => g.reader_id === p.id);
+    const myBooks = (bookProgress || []).filter(x => x.reader_id === p.id);
+    const myPods = (podProgress || []).filter(x => x.reader_id === p.id);
+    const items = own.map(g => {
+      if (g.item_type === 'book') {
+        const book = BOOKS.find(b => b.id === g.item_id);
+        const prog = myBooks.find(x => x.book_id === g.item_id);
+        return { type: 'book', id: g.item_id, title: book?.title || 'Removed book', progress: prog ? `${prog.percent}% read` : 'not opened yet' };
+      }
+      const pod = PODCASTS.find(x => x.id === g.item_id);
+      const prog = myPods.find(x => x.podcast_id === g.item_id);
+      return { type: 'podcast', id: g.item_id, title: pod?.title || 'Removed podcast', progress: prog && prog.position_sec > 0 ? `listened to ${fmtDuration(prog.position_sec)}` : 'not played yet' };
+    });
+    const activity = [...myBooks, ...myPods].map(x => x.updated_at).filter(Boolean).sort();
     return {
       id: p.id,
       email: p.email,
-      bookIds, podIds,
-      ownedBookTitles: bookIds.map(id => BOOKS.find(b => b.id === id)?.title).filter(Boolean),
-      ownedPodTitles: podIds.map(id => PODCASTS.find(x => x.id === id)?.title).filter(Boolean),
+      name: p.display_name || '',
+      joined: p.created_at,
+      lastActive: activity.length ? activity[activity.length - 1] : null,
+      items,
     };
   });
+}
+
+function fmtDuration(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 async function loadLog() {
@@ -920,13 +982,10 @@ async function loadEverything() {
 function renderDashboard() {
   document.getElementById('statBooks').textContent = BOOKS.length;
   document.getElementById('statReaders').textContent = READERS.length;
-  const totalSold = READERS.reduce((sum, r) => sum + r.bookIds.length + r.podIds.length, 0);
-  document.getElementById('statSold').textContent = totalSold;
-  const revenue = READERS.reduce((sum, r) => {
-    const bookRev = r.bookIds.reduce((s2, bid) => { const b = BOOKS.find(x => x.id === bid); return s2 + (b?.price || 0); }, 0);
-    const podRev = r.podIds.reduce((s2, pid) => { const p = PODCASTS.find(x => x.id === pid); return s2 + (p?.price || 0); }, 0);
-    return sum + bookRev + podRev;
-  }, 0);
+  // Revenue uses the price recorded when each access was granted (free gifts are 0).
+  const paid = GRANTS.map(grantPricePaid).filter(p => p > 0);
+  document.getElementById('statSold').textContent = paid.length;
+  const revenue = paid.reduce((sum, p) => sum + p, 0);
   document.getElementById('statRevenue').textContent = '₹' + revenue.toLocaleString('en-IN');
   document.getElementById('dashboardLog').innerHTML = LOG.slice(0, 4).map(l =>
     `<div class="log-entry"><div class="log-time">${l.time}</div><div class="log-body">${l.body}</div></div>`
@@ -950,7 +1009,7 @@ function renderBooksTable() {
         <div class="cell-title-wrap">
           <span class="row-cover" style="${b.cover_image_url ? `background-image:url('${b.cover_image_url}');background-size:cover;background-position:center;` : `background:${b.cover_color}`}"></span>
           <div class="cell-title-text">
-            <div class="t-main">${b.title}</div>
+            <div class="t-main">${b.title} ${b.status === 'draft' ? '<span class="badge-draft">Draft — hidden</span>' : ''}</div>
             <div class="t-sub">${b.author}</div>
           </div>
         </div>
@@ -958,6 +1017,9 @@ function renderBooksTable() {
       <td><span class="lang-tag">${b.lang}</span></td>
       <td><input type="number" class="price-input" value="${b.price ?? ''}" placeholder="TBD" data-id="${b.id}" onchange="updatePrice('${b.id}', this.value)"></td>
       <td>
+        ${b.status === 'draft'
+          ? `<button class="btn btn-gold btn-tiny" onclick="setBookStatus('${b.id}', 'published')">Publish</button>`
+          : `<button class="btn btn-outline btn-tiny" onclick="setBookStatus('${b.id}', 'draft')">Unpublish</button>`}
         <button class="btn btn-gold btn-tiny" onclick="openContentModal('${b.id}')">Content</button>
         <button class="btn btn-danger-outline btn-tiny" onclick="deleteBook('${b.id}')">Remove</button>
       </td>
@@ -1059,12 +1121,70 @@ async function loadAndRenderChapters() {
         <div class="form-field"><label>Title (optional)</label><input type="text" data-chapter-title="${c.id}" value="${escapeHtml(c.title || '')}"></div>
       </div>
       <textarea data-chapter-id="${c.id}">${escapeHtml(c.content || '')}</textarea>
+      <div class="chapter-preview" id="chapterPreview-${c.id}" style="display:none;"></div>
       <div class="chapter-item-actions">
+        <button class="btn btn-outline btn-tiny" id="chapterPreviewBtn-${c.id}" onclick="toggleChapterPreview('${c.id}')">Preview</button>
         <button class="btn btn-gold btn-tiny" onclick="saveChapter('${c.id}')">Save Changes</button>
         <button class="btn btn-danger-outline btn-tiny" onclick="deleteChapter('${c.id}')">Delete Chapter</button>
       </div>
     </div>
   `).join('');
+}
+
+/* ---------- Chapter preview ----------
+   Shows a chapter the way the reader app displays it, from whatever is in the text box
+   right now (so unsaved edits can be checked). These formatting rules mirror the app's
+   sanitizeInline/parseStoredPara — keep the two in step. */
+const PREVIEW_INLINE_TAGS = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', SUP: 'sup', SUB: 'sub' };
+const PREVIEW_PARA_CLASSES = new Set(['center', 'right', 'left', 'justify', 'indent', 'inset', 'tight']);
+
+function previewSanitizeInline(raw) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = raw;
+  const walk = (node) => {
+    let out = '';
+    node.childNodes.forEach(n => {
+      if (n.nodeType === 3) out += escapeHtml(n.nodeValue);
+      else if (n.nodeType === 1) {
+        if (n.tagName === 'BR') out += '<br>';
+        else if (PREVIEW_INLINE_TAGS[n.tagName]) out += `<${PREVIEW_INLINE_TAGS[n.tagName]}>${walk(n)}</${PREVIEW_INLINE_TAGS[n.tagName]}>`;
+        else out += walk(n);
+      }
+    });
+    return out;
+  };
+  return walk(tpl.content);
+}
+
+function previewParagraph(raw) {
+  let cls = '', inner = raw.trim();
+  const m = inner.match(/^<p(?:\s+class="([^"]*)")?\s*>([\s\S]*)<\/p>$/i);
+  if (m) {
+    cls = (m[1] || '').split(/\s+/).filter(c => PREVIEW_PARA_CLASSES.has(c)).map(c => 'pf-' + c).join(' ');
+    inner = m[2];
+  }
+  return `<p${cls ? ` class="${cls}"` : ''}>${previewSanitizeInline(inner.trim())}</p>`;
+}
+
+function toggleChapterPreview(chapterId) {
+  const box = document.getElementById('chapterPreview-' + chapterId);
+  const btn = document.getElementById('chapterPreviewBtn-' + chapterId);
+  if (box.style.display !== 'none') {
+    box.style.display = 'none';
+    btn.textContent = 'Preview';
+    return;
+  }
+  const label = document.querySelector(`input[data-chapter-label="${chapterId}"]`).value.trim();
+  const title = document.querySelector(`input[data-chapter-title="${chapterId}"]`).value.trim();
+  const content = document.querySelector(`textarea[data-chapter-id="${chapterId}"]`).value;
+  // Same heading rule as the app: with a title, the label sits small above it.
+  const header = title
+    ? `${label ? `<div class="pv-label">${previewSanitizeInline(label)}</div>` : ''}<div class="pv-title">${previewSanitizeInline(title)}</div>`
+    : (label ? `<div class="pv-title">${previewSanitizeInline(label)}</div>` : '');
+  const paras = content.split(/\n\s*\n/).filter(p => p.trim()).map(previewParagraph).join('');
+  box.innerHTML = `<div class="pv-note">Preview — how readers see this chapter (page breaks depend on their screen)</div>${header}${paras || '<p><em>This chapter has no text.</em></p>'}`;
+  box.style.display = 'block';
+  btn.textContent = 'Hide Preview';
 }
 
 async function saveChapter(chapterId) {
@@ -1136,7 +1256,8 @@ async function uploadCoverImage(idPrefix, file) {
   return data.publicUrl;
 }
 
-async function addBook() {
+// asDraft: save the book hidden from the website and app until "Publish" is clicked.
+async function addBook(asDraft = false) {
   const title = document.getElementById('newBookTitle').value.trim();
   const author = document.getElementById('newBookAuthor').value.trim();
   const lang = document.getElementById('newBookLang').value.trim();
@@ -1184,7 +1305,7 @@ async function addBook() {
     cover_image_url: coverImageUrl,
     sample_text: contentText || null,
     source_format: pendingSourceFormat || null,
-    status: 'published',
+    status: asDraft ? 'draft' : 'published',
   });
   if (error) { showToast('Could not add book: ' + error.message); return; }
 
@@ -1221,9 +1342,26 @@ async function addBook() {
   renderGrantBookChecks();
   renderDashboard();
   renderNotifBookOptions();
-  showToast(epubChapterCount
-    ? `"${title}" added with ${epubChapterCount} chapter${epubChapterCount === 1 ? '' : 's'}.`
-    : `"${title}" added to King's Library.`);
+  const chapterNote = epubChapterCount ? ` with ${epubChapterCount} chapter${epubChapterCount === 1 ? '' : 's'}` : '';
+  showToast(asDraft
+    ? `"${title}" saved as a draft${chapterNote} — hidden from readers until you click Publish.`
+    : (epubChapterCount ? `"${title}" added${chapterNote}.` : `"${title}" added to King's Library.`));
+}
+
+async function setBookStatus(id, status) {
+  const book = BOOKS.find(b => b.id === id);
+  if (status === 'draft') {
+    const owners = GRANTS.filter(g => g.item_type === 'book' && g.item_id === id).length;
+    const warn = owners ? ` ${owners} reader${owners === 1 ? ' owns' : 's own'} it and won't be able to open it while it's a draft.` : '';
+    if (!confirm(`Unpublish "${book?.title}"? It will be hidden from the website and the app.${warn}`)) return;
+  }
+  const { error } = await sb.from('books').update({ status }).eq('id', id);
+  if (error) { showToast('Could not update book: ' + error.message); return; }
+  await loadBooks();
+  renderBooksTable();
+  renderGrantBookChecks();
+  renderNotifBookOptions();
+  showToast(status === 'published' ? `"${book?.title}" is now live on the website and app.` : `"${book?.title}" is now a draft — hidden from readers.`);
 }
 
 /* ---------- Podcasts ---------- */
@@ -1662,7 +1800,7 @@ editPodImageInput.addEventListener('change', () => {
 function renderGrantBookChecks() {
   document.getElementById('grantBookChecks').innerHTML = BOOKS.map(b => `
     <label class="access-check-item">
-      <input type="checkbox" value="${b.id}"> ${b.title}
+      <input type="checkbox" value="${b.id}"> ${b.title}${b.status === 'draft' ? ' (draft)' : ''}
     </label>
   `).join('');
 }
@@ -1676,17 +1814,53 @@ function renderGrantPodChecks() {
 }
 
 function renderReadersTable() {
-  document.getElementById('readersTableBody').innerHTML = READERS.map(r => `
+  // Suggestions for the Grant Access email box.
+  document.getElementById('readerEmailList').innerHTML = READERS.map(r =>
+    `<option value="${escapeHtml(r.email)}">${escapeHtml(r.name)}</option>`).join('');
+
+  const q = (document.getElementById('readerSearch').value || '').trim().toLowerCase();
+  const shown = READERS
+    .filter(r => !q || r.email.toLowerCase().includes(q) || r.name.toLowerCase().includes(q) || r.items.some(i => i.title.toLowerCase().includes(q)))
+    .sort((a, b) => String(b.lastActive || b.joined || '').localeCompare(String(a.lastActive || a.joined || '')));
+  const body = document.getElementById('readersTableBody');
+  if (!shown.length) {
+    body.innerHTML = `<tr><td colspan="5" style="color:var(--text-on-ink-dim);font-size:13px;">${READERS.length ? 'No readers match your search.' : 'No readers yet.'}</td></tr>`;
+    return;
+  }
+  body.innerHTML = shown.map(r => `
     <tr>
-      <td>${r.email}</td>
       <td>
-        ${r.ownedBookTitles.map(t => `<span class="badge-owned" style="margin-right:4px;">${t}</span>`).join('')}
-        ${r.ownedPodTitles.map(t => `<span class="badge-owned" style="margin-right:4px;">🎙️ ${t}</span>`).join('')}
-        ${(!r.ownedBookTitles.length && !r.ownedPodTitles.length) ? '<span class="badge-locked">Nothing yet</span>' : ''}
+        <div class="t-main">${escapeHtml(r.email)}</div>
+        ${r.name ? `<div class="t-sub">${escapeHtml(r.name)}</div>` : ''}
+      </td>
+      <td style="white-space:nowrap;">${r.joined ? new Date(r.joined).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
+      <td style="white-space:nowrap;">${r.lastActive ? fmtTime(r.lastActive) : '<span class="badge-locked">Not yet</span>'}</td>
+      <td>
+        ${r.items.map(i => `
+          <span class="badge-owned owned-item" title="${escapeHtml(i.progress)}">
+            ${i.type === 'podcast' ? '🎙️ ' : ''}${escapeHtml(i.title)} <span class="owned-progress">· ${escapeHtml(i.progress)}</span>
+            <button class="owned-remove" title="Remove this ${i.type} from ${escapeHtml(r.email)}" onclick="revokeOne('${r.id}', '${i.type}', '${i.id}')">×</button>
+          </span>`).join('')}
+        ${!r.items.length ? '<span class="badge-locked">Nothing yet</span>' : ''}
       </td>
       <td><button class="btn btn-outline btn-tiny" onclick="removeReader('${r.id}')">Revoke All Access</button></td>
     </tr>
   `).join('');
+}
+
+async function revokeOne(readerId, itemType, itemId) {
+  const r = READERS.find(x => x.id === readerId);
+  const item = r?.items.find(i => i.type === itemType && i.id === itemId);
+  if (!confirm(`Remove "${item?.title}" from ${r?.email}? They'll keep their account and everything else they own.`)) return;
+  const { error } = await sb.from('access_grants').delete().eq('reader_id', readerId).eq('item_type', itemType).eq('item_id', itemId);
+  if (error) { showToast('Could not remove access: ' + error.message); return; }
+  await sb.from('activity_log').insert({ body: `Removed <strong>${escapeHtml(item?.title || itemType)}</strong> from <strong>${escapeHtml(r?.email || '')}</strong>.` });
+  await loadReaders();
+  await loadLog();
+  renderReadersTable();
+  renderDashboard();
+  renderFullLog();
+  showToast(`Removed "${item?.title}" from ${r?.email}.`);
 }
 
 async function removeReader(readerId) {
@@ -1712,12 +1886,14 @@ async function grantAccess() {
   if (checkedBooks.length === 0 && checkedPods.length === 0) { showToast('Select at least one book or podcast to grant.'); return; }
 
   showToast('Granting access…');
+  const gift = document.getElementById('grantIsGift').checked;
   const { data, error } = await sb.functions.invoke('grant-access', {
-    body: { email, bookIds: checkedBooks, podcastIds: checkedPods },
+    body: { email, bookIds: checkedBooks, podcastIds: checkedPods, gift },
   });
   if (error || data?.error) { showToast('Could not grant access: ' + (data?.error || error.message)); return; }
 
   document.getElementById('grantEmail').value = '';
+  document.getElementById('grantIsGift').checked = false;
   document.querySelectorAll('#grantBookChecks input:checked, #grantPodChecks input:checked').forEach(c => c.checked = false);
 
   await loadReaders();
