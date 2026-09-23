@@ -410,7 +410,8 @@
           <button class="btn btn-gold btn-tiny" onclick="saveBookDetails()">Save Book Details</button>
         </div>
 
-        <h3 style="font-family:var(--serif);font-size:15px;font-weight:600;margin-bottom:14px;">Chapters</h3>
+        <h3 style="font-family:var(--serif);font-size:15px;font-weight:600;margin-bottom:6px;">Chapters</h3>
+        <p style="font-size:12px;color:var(--text-on-ink-dim);margin-bottom:14px;">Formatting from Word files is kept as small tags: &lt;b&gt;bold&lt;/b&gt;, &lt;i&gt;italic&lt;/i&gt;, &lt;u&gt;underline&lt;/u&gt;, &lt;br&gt; for a line break, and &lt;p class="center"&gt;…&lt;/p&gt; for a centered paragraph. You can type these yourself too. Leave a blank line between paragraphs.</p>
         <div class="form-field full" style="margin-bottom:18px;">
           <label>Replace all chapters from a book file — EPUB, Word (.docx), PDF, or text (.txt)</label>
           <div class="upload-box" id="replaceChaptersUploadBox">
@@ -1692,8 +1693,8 @@ async function parseEpubFile(file) {
 }
 
 /* ---------- Word / PDF / text → chapters ----------
-   Word and PDF libraries are loaded only when such a file is chosen, so the admin
-   panel stays fast. Every format ends up as a list of { label, title, content }. */
+   The PDF library is loaded only when a PDF is chosen, so the admin panel stays fast.
+   Every format ends up as a list of { label, title, content }. */
 const loadedScripts = {};
 function loadScript(src) {
   if (!loadedScripts[src]) {
@@ -1721,31 +1722,34 @@ function isHeadingLine(line) {
 /* blocks: [{ text, heading }] in reading order, where heading=true marks a chapter start.
    Tiny sections (table-of-contents entries, blank title pages) are dropped. */
 function blocksToChapters(blocks) {
+  // Blocks from plain text have only .text; blocks from Word also carry .plain (text
+  // without formatting tags, used for detection) and .subheading (a smaller heading style).
+  const plainOf = b => (b.plain ?? b.text).trim();
   const chapters = [];
   let current = null;
   let preface = [];
   for (const b of blocks) {
     if (b.heading) {
-      current = { label: b.text.trim().slice(0, 80), paras: [] };
+      current = { label: plainOf(b).slice(0, 80), paras: [] };
       chapters.push(current);
     } else if (current) {
-      current.paras.push(b.text);
+      current.paras.push(b);
     } else {
-      preface.push(b.text);
+      preface.push(b);
     }
   }
   const result = [];
-  const prefaceText = preface.join('\n\n').trim();
-  if (prefaceText.length >= 300) result.push({ label: 'Introduction', title: null, content: prefaceText });
+  const prefaceText = preface.map(b => b.text).join('\n\n').trim();
+  if (preface.map(plainOf).join('').length >= 300) result.push({ label: 'Introduction', title: null, content: prefaceText });
   for (const c of chapters) {
-    // "Chapter 3" followed by a short line is usually the chapter's name — use it as the title.
+    // "Chapter 3" followed by a short line (or a smaller heading) is usually the chapter's name — use it as the title.
     let title = null;
-    if (c.paras.length > 1 && c.paras[0].length <= 80 && !/[.!?]$/.test(c.paras[0]) && /^(chapter|part|book|अध्याय|ਅਧਿਆਇ|باب|الفصل)/i.test(c.label) && c.label.split(/\s+/).length <= 3) {
-      title = c.paras.shift();
+    const first = c.paras[0];
+    if (c.paras.length > 1 && (first.subheading || (plainOf(first).length <= 80 && !/[.!?]$/.test(plainOf(first)) && /^(chapter|part|book|अध्याय|ਅਧਿਆਇ|باب|الفصل)/i.test(c.label) && c.label.split(/\s+/).length <= 3))) {
+      title = plainOf(c.paras.shift()).slice(0, 120);
     }
-    const content = c.paras.join('\n\n').trim();
-    if (content.length < 150) continue;
-    result.push({ label: c.label, title, content });
+    if (c.paras.map(plainOf).join('').length < 150) continue;
+    result.push({ label: c.label, title, content: c.paras.map(b => b.text).join('\n\n').trim() });
   }
   return result;
 }
@@ -1788,26 +1792,192 @@ function splitTextIntoChapters(text, extraHeadingIdx) {
   return { chapters: total ? [{ label: 'Chapter One', title: null, content: plain.join('\n\n') }] : [], detected: false };
 }
 
-async function parseDocxFile(file) {
-  await loadScript('https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js');
-  const { value: html } = await window.mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const els = Array.from(doc.body.children);
-  // Use the biggest heading style the author used for at least two sections (Heading 1, else 2, else 3).
-  const level = ['H1', 'H2', 'H3'].find(tag => els.filter(e => e.tagName === tag).length >= 2);
-  if (level) {
-    const blocks = [];
-    for (const e of els) {
-      const text = e.textContent.trim();
-      if (!text) continue;
-      if (e.tagName === level) blocks.push({ text, heading: true });
-      else if (e.tagName === 'UL' || e.tagName === 'OL') e.querySelectorAll('li').forEach(li => blocks.push({ text: '• ' + li.textContent.trim(), heading: false }));
-      else blocks.push({ text, heading: false });
-    }
-    const chapters = blocksToChapters(blocks);
-    if (chapters.length >= 2) return { chapters, detected: true };
+/* Word (.docx) is read straight from its XML so the book keeps its look: bold, italic,
+   underline, superscript, line breaks, alignment, indents and paragraph spacing.
+   Each paragraph is stored as inline tags (<b> <i> <u> <sup> <sub> <br>), wrapped in
+   <p class="…"> when it needs a layout class the reader understands. */
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const wKids = (el, name) => el ? Array.from(el.childNodes).filter(n => n.nodeType === 1 && n.localName === name && n.namespaceURI === W_NS) : [];
+const wKid = (el, name) => wKids(el, name)[0] || null;
+const wVal = (el, attr = 'val') => el ? (el.getAttributeNS(W_NS, attr) ?? el.getAttribute('w:' + attr)) : null;
+const wOn = (el) => !!el && !['0', 'false', 'off', 'none'].includes(String(wVal(el) ?? '1').toLowerCase());
+
+function readDocxPPr(pPr) {
+  const out = {};
+  if (!pPr) return out;
+  const jc = wKid(pPr, 'jc'); if (jc) out.jc = wVal(jc);
+  const ind = wKid(pPr, 'ind');
+  if (ind) {
+    const left = wVal(ind, 'left') ?? wVal(ind, 'start'); if (left != null) out.indLeft = Number(left) || 0;
+    const first = wVal(ind, 'firstLine'); if (first != null) out.indFirst = Number(first) || 0;
+    if (wVal(ind, 'hanging') != null) out.indFirst = 0;
   }
-  return splitTextIntoChapters(htmlDocToPlainText(doc));
+  const sp = wKid(pPr, 'spacing');
+  if (sp && wVal(sp, 'after') != null) out.after = Number(wVal(sp, 'after')) || 0;
+  if (sp && wVal(sp, 'before') != null) out.before = Number(wVal(sp, 'before')) || 0;
+  const ol = wKid(pPr, 'outlineLvl'); if (ol) out.outline = Number(wVal(ol));
+  return out;
+}
+
+function readDocxRPr(rPr) {
+  const out = {};
+  if (!rPr) return out;
+  if (wKid(rPr, 'b')) out.b = wOn(wKid(rPr, 'b'));
+  if (wKid(rPr, 'i')) out.i = wOn(wKid(rPr, 'i'));
+  const u = wKid(rPr, 'u'); if (u) out.u = wOn(u);
+  const va = wKid(rPr, 'vertAlign'); if (va) out.va = wVal(va);
+  return out;
+}
+
+function readDocxStyles(stylesDoc) {
+  const raw = {};
+  let defaultPara = null;
+  const root = stylesDoc?.documentElement;
+  const defaults = { p: {}, r: {} };
+  if (root) {
+    const dd = wKid(root, 'docDefaults');
+    defaults.p = readDocxPPr(wKid(wKid(dd, 'pPrDefault'), 'pPr'));
+    defaults.r = readDocxRPr(wKid(wKid(dd, 'rPrDefault'), 'rPr'));
+    wKids(root, 'style').forEach(s => {
+      const id = wVal(s, 'styleId');
+      raw[id] = {
+        name: (wVal(wKid(s, 'name')) || '').toLowerCase(),
+        basedOn: wVal(wKid(s, 'basedOn')),
+        p: readDocxPPr(wKid(s, 'pPr')),
+        r: readDocxRPr(wKid(s, 'rPr')),
+      };
+      if (wVal(s, 'type') === 'paragraph' && ['1', 'true', 'on'].includes(String(wVal(s, 'default')))) defaultPara = id;
+    });
+  }
+  const memo = {};
+  const resolve = (id, depth = 0) => {
+    if (!id || !raw[id] || depth > 20) return { name: '', p: {}, r: {} };
+    if (memo[id]) return memo[id];
+    const parent = resolve(raw[id].basedOn, depth + 1);
+    return (memo[id] = { name: raw[id].name, p: { ...parent.p, ...raw[id].p }, r: { ...parent.r, ...raw[id].r } });
+  };
+  return { resolve, defaultPara, defaults };
+}
+
+function escapeXmlText(s) {
+  return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+
+async function parseDocxFile(file) {
+  const zip = await JSZip.loadAsync(file);
+  const docEntry = resolveZipPath(zip, 'word/document.xml');
+  if (!docEntry) throw new Error('this doesn\'t look like a Word .docx file');
+  const doc = new DOMParser().parseFromString(await docEntry.async('text'), 'application/xml');
+  const stylesEntry = resolveZipPath(zip, 'word/styles.xml');
+  const styles = readDocxStyles(stylesEntry ? new DOMParser().parseFromString(await stylesEntry.async('text'), 'application/xml') : null);
+
+  const body = doc.getElementsByTagNameNS(W_NS, 'body')[0];
+  if (!body) throw new Error('no text found in this Word file');
+  const paras = [];
+  for (const p of Array.from(body.getElementsByTagNameNS(W_NS, 'p'))) {
+    const pPr = wKid(p, 'pPr');
+    const styleId = wVal(wKid(pPr, 'pStyle')) || styles.defaultPara;
+    const style = styles.resolve(styleId);
+    const pp = { ...styles.defaults.p, ...style.p, ...readDocxPPr(pPr) };
+    const baseR = { ...styles.defaults.r, ...style.r };
+
+    // Runs that belong to this paragraph (not to a text box nested inside it, not deleted text).
+    const segs = [];
+    for (const r of Array.from(p.getElementsByTagNameNS(W_NS, 'r'))) {
+      let a = r.parentNode, skip = false;
+      while (a && a !== p) {
+        if (a.localName === 'p' || a.localName === 'del' || a.localName === 'moveFrom') { skip = true; break; }
+        a = a.parentNode;
+      }
+      if (skip) continue;
+      const rPr = wKid(r, 'rPr');
+      const fmt = { ...baseR, ...styles.resolve(wVal(wKid(rPr, 'rStyle'))).r, ...readDocxRPr(rPr) };
+      for (const n of Array.from(r.childNodes)) {
+        if (n.nodeType !== 1 || n.namespaceURI !== W_NS) continue;
+        let piece = null;
+        if (n.localName === 't') piece = escapeXmlText(n.textContent);
+        else if (n.localName === 'tab') piece = ' ';
+        else if (n.localName === 'noBreakHyphen') piece = '-';
+        else if ((n.localName === 'br' && wVal(n, 'type') !== 'page' && wVal(n, 'type') !== 'column') || n.localName === 'cr') piece = '<br>';
+        if (piece != null) segs.push({ t: piece, b: !!fmt.b, i: !!fmt.i, u: !!fmt.u, va: fmt.va || '' });
+      }
+    }
+
+    // Merge neighbouring runs with the same look, then wrap each in its tags.
+    const merged = [];
+    for (const s of segs) {
+      const last = merged[merged.length - 1];
+      if (last && last.b === s.b && last.i === s.i && last.u === s.u && last.va === s.va) last.t += s.t;
+      else merged.push({ ...s });
+    }
+    let html = '', plain = '';
+    let allBold = true;
+    for (const s of merged) {
+      plain += s.t === '<br>' ? '\n' : s.t.replace(/<br>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      if (!s.t.replace(/<br>/g, '').trim()) { html += s.t; continue; }
+      if (!s.b) allBold = false;
+      let t = s.t;
+      if (s.va === 'superscript') t = `<sup>${t}</sup>`;
+      else if (s.va === 'subscript') t = `<sub>${t}</sub>`;
+      if (s.u) t = `<u>${t}</u>`;
+      if (s.i) t = `<i>${t}</i>`;
+      if (s.b) t = `<b>${t}</b>`;
+      html += t;
+    }
+    html = html.replace(/^(\s|<br>)+|(\s|<br>)+$/g, '');
+    plain = plain.trim();
+
+    let level = null;
+    if (Number.isFinite(pp.outline) && pp.outline < 9) level = pp.outline;
+    const hm = style.name.match(/^heading\s*(\d)/);
+    if (hm) level = Number(hm[1]) - 1;
+    const isTitleStyle = style.name === 'title' || style.name === 'subtitle';
+
+    const cls = [];
+    const jc = (pp.jc || 'left').toLowerCase();
+    if (jc === 'center') cls.push('center');
+    else if (jc === 'right' || jc === 'end') cls.push('right');
+    else if (jc === 'left' || jc === 'start') cls.push('left');
+    if ((pp.indFirst || 0) >= 200) cls.push('indent');
+    if ((pp.indLeft || 0) >= 360) cls.push('inset');
+
+    paras.push({ html, plain, cls, after: pp.after || 0, before: pp.before || 0, level, isTitleStyle, allBold: allBold && !!plain, empty: !plain });
+  }
+
+  // Spacing: a paragraph with (almost) no space after it in Word runs straight into the
+  // next line — how verses and poems are usually typed — unless an empty paragraph follows.
+  const blocks = [];
+  paras.forEach((p, idx) => {
+    if (p.empty) return;
+    const next = paras[idx + 1];
+    const cls = [...p.cls];
+    if (p.after < 100 && next && !next.empty && next.before < 100) cls.push('tight');
+    const text = cls.length ? `<p class="${cls.join(' ')}">${p.html}</p>` : p.html;
+    blocks.push({ text, plain: p.plain, level: p.level, isTitleStyle: p.isTitleStyle, allBold: p.allBold });
+  });
+  if (!blocks.length) throw new Error('no text found in this Word file');
+
+  const tryWith = (isHeading, isSub = () => false) => {
+    const marked = blocks.map(b => ({ ...b, heading: isHeading(b), subheading: !isHeading(b) && isSub(b) }));
+    if (marked.filter(b => b.heading).length < 2) return null;
+    const chapters = blocksToChapters(marked);
+    return chapters.length >= 2 ? chapters : null;
+  };
+  // 1) Word heading styles: the biggest heading level used at least twice.
+  const level = [0, 1, 2].find(l => blocks.filter(b => b.level === l).length >= 2);
+  let chapters = level != null ? tryWith(b => b.level === level, b => b.level != null && b.level > level) : null;
+  // 2) Lines like "Chapter 1" / "अध्याय 3".
+  if (!chapters) chapters = tryWith(b => isHeadingLine(b.plain));
+  // 3) Short lines that are entirely bold (a common way to type chapter names by hand).
+  if (!chapters) {
+    const boldHeads = blocks.filter(b => b.allBold && b.plain.length <= 60 && !/[.,;:!?]$/.test(b.plain) && !b.plain.includes('\n'));
+    if (boldHeads.length >= 2 && boldHeads.length <= 200) chapters = tryWith(b => boldHeads.includes(b));
+  }
+  if (chapters) return { chapters, detected: true };
+
+  const total = blocks.reduce((s, b) => s + b.plain.length, 0);
+  if (total > 30000) return { chapters: chunkIntoParts(blocks.map(b => b.text)), detected: false };
+  return { chapters: [{ label: 'Chapter One', title: null, content: blocks.map(b => b.text).join('\n\n') }], detected: false };
 }
 
 async function parsePdfFile(file) {

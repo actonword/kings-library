@@ -20,10 +20,16 @@ _original-mockups/   the original static demo files, kept for reference
   email in the admin panel. That's what creates their account and emails them the
   6-digit sign-in code.
 - Book chapters: uploading an **.epub, .docx, .pdf or .txt** in Manage Books
-  auto-splits it into chapters, all client-side in the browser (JSZip for EPUB;
-  mammoth.js and pdf.js are lazy-loaded from jsDelivr for Word/PDF). Detection order:
-  EPUB spine / Word heading styles / PDF bookmarks → "Chapter …"-style lines (English,
-  Hindi, Punjabi, Arabic) → large-font lines (PDF) → fixed ~15k-char "Part N" chunks.
+  auto-splits it into chapters, all client-side in the browser (JSZip for EPUB and
+  Word — the .docx XML is read directly; pdf.js is lazy-loaded from jsDelivr for PDF).
+  Detection order: EPUB spine / Word heading styles / PDF bookmarks → "Chapter …"-style
+  lines (English, Hindi, Punjabi, Arabic) → all-bold short lines (Word) / large-font
+  lines (PDF) → fixed ~15k-char "Part N" chunks.
+- Chapter text format: paragraphs separated by blank lines. Word uploads keep their look
+  as limited inline tags — `<b> <i> <u> <sup> <sub> <br>` — and a paragraph wrapper
+  `<p class="center|right|left|indent|inset|tight">` for alignment, indents and
+  "no space after" (verse lines). The reader sanitizes everything else to plain text
+  and justifies untagged paragraphs.
   Pasted text is split the same way. Scanned (image-only) PDFs have no text and can't be
   read. The "Content" button can also replace a book's chapters from a file, and
   review/edit/add/delete them individually.

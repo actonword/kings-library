@@ -597,17 +597,17 @@
     touch-action: none;
   }
   .page-content .chapter-label {
-    font-size: 11px;
+    font-size: 13px;
     letter-spacing: 0.06em;
     color: var(--gold);
-    margin-bottom: 14px;
-    font-weight: 600;
+    margin-bottom: 10px;
+    font-weight: 700;
     text-align: center;
   }
   .page-content .chapter-title {
     font-family: var(--serif);
     font-size: 24px;
-    font-weight: 600;
+    font-weight: 700;
     margin-bottom: 18px;
     line-height: 1.3;
     text-align: center;
@@ -624,6 +624,15 @@
     -webkit-hyphens: auto;
     hyphens: auto;
   }
+  /* Paragraph layout kept from the uploaded file (see parseStoredPara) */
+  .page-content p.pf-center { text-align: center; text-align-last: center; }
+  .page-content p.pf-right { text-align: right; }
+  .page-content p.pf-left { text-align: start; }
+  .page-content p.pf-justify { text-align: justify; }
+  .page-content p.pf-indent { text-indent: 1.6em; }
+  .page-content p.pf-inset { margin-left: 2em; margin-right: 2em; }
+  .page-content p.pf-tight { margin-bottom: 0; }
+  .page-content p b, .page-content .chapter-title b, .page-content .chapter-label b { font-weight: 700; }
   .page-content.rtl { direction: rtl; }
   .page-content.rtl p, .page-content.rtl .chapter-title { font-family: 'Noto Nastaliq Urdu', var(--serif); }
   .page-content.devanagari p, .page-content.devanagari .chapter-title { font-family: 'Noto Sans Devanagari', var(--serif); }
@@ -1333,9 +1342,9 @@ async function openBook(id) {
     const { data: chapters, error } = await sb.from('chapters').select('*').eq('book_id', id).order('position');
     if (error) { showToast('Could not load this book: ' + error.message); return; }
     currentBook.chapters = (chapters || []).map(c => ({
-      label: c.label || '',
-      title: c.title || '',
-      paras: (c.content || '').split(/\n\s*\n/).filter(Boolean),
+      label: sanitizeInline(c.label || ''),
+      title: sanitizeInline(c.title || ''),
+      paras: (c.content || '').split(/\n\s*\n/).filter(p => p.trim()).map(parseStoredPara),
     }));
     currentBook._chaptersLoaded = true;
   }
@@ -1407,27 +1416,105 @@ function measurerFits(el) {
   return el.scrollHeight <= el.clientHeight + 1;
 }
 
-/* A single paragraph that's too tall to fit on any one page (rare) gets split by words. */
-function splitLongParagraph(el, text) {
-  const words = text.split(/\s+/).filter(Boolean);
+/* ---------- Formatted text ----------
+   Chapter text is paragraphs separated by blank lines. A paragraph may carry simple
+   formatting kept from the uploaded file: <b> <i> <u> <sup> <sub> <br>, and may be
+   wrapped as <p class="center inset …"> for alignment/indents. Anything else is shown
+   as plain text, so stored content can never inject markup into the reader. */
+const INLINE_TAGS = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', SUP: 'sup', SUB: 'sub' };
+const PARA_CLASSES = new Set(['center', 'right', 'left', 'justify', 'indent', 'inset', 'tight']);
+
+function escapeText(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function sanitizeInline(raw) {
+  if (!/[<&]/.test(raw)) return escapeText(raw);
+  const tpl = document.createElement('template');
+  tpl.innerHTML = raw;
+  const walk = (node) => {
+    let out = '';
+    node.childNodes.forEach(n => {
+      if (n.nodeType === 3) out += escapeText(n.nodeValue);
+      else if (n.nodeType === 1) {
+        if (n.tagName === 'BR') out += '<br>';
+        else if (INLINE_TAGS[n.tagName]) out += `<${INLINE_TAGS[n.tagName]}>${walk(n)}</${INLINE_TAGS[n.tagName]}>`;
+        else out += walk(n);
+      }
+    });
+    return out;
+  };
+  return walk(tpl.content);
+}
+
+function parseStoredPara(raw) {
+  let cls = '', inner = raw.trim();
+  const m = inner.match(/^<p(?:\s+class="([^"]*)")?\s*>([\s\S]*)<\/p>$/i);
+  if (m) {
+    cls = (m[1] || '').split(/\s+/).filter(c => PARA_CLASSES.has(c)).map(c => 'pf-' + c).join(' ');
+    inner = m[2];
+  }
+  return { cls, html: sanitizeInline(inner.trim()) };
+}
+
+function paraElement(para) {
+  const p = document.createElement('p');
+  if (para.cls) p.className = para.cls;
+  p.innerHTML = para.html;
+  return p;
+}
+
+// Chapter heading: with a title, the label ("Chapter 3") sits small above it;
+// without one, the label itself is shown as the big heading.
+function chapterHeaderHtml(label, title) {
+  if (title) return `${label ? `<div class="chapter-label">${label}</div>` : ''}<div class="chapter-title">${title}</div>`;
+  return label ? `<div class="chapter-title">${label}</div>` : '';
+}
+
+/* Close tags left open at the end of a chunk and reopen them at the start of the next,
+   so bold/italic survive when one huge paragraph is split across pages. */
+function balanceChunks(chunks) {
+  let carry = [];
+  return chunks.map(chunk => {
+    const open = [...carry];
+    for (const [, close, tag] of chunk.matchAll(/<(\/?)(b|i|u|sup|sub)>/g)) {
+      if (close) { const i = open.lastIndexOf(tag); if (i !== -1) open.splice(i, 1); }
+      else open.push(tag);
+    }
+    const fixed = carry.map(t => `<${t}>`).join('') + chunk + [...open].reverse().map(t => `</${t}>`).join('');
+    carry = open;
+    return fixed;
+  });
+}
+
+/* A single paragraph too tall for one page (rare) is split at line breaks first
+   (keeps verses whole), then by words. Sanitized html has no attributes, so
+   splitting on whitespace never cuts through a tag. */
+function splitLongParagraph(el, para) {
+  const pieces = [];
+  para.html.split('<br>').forEach(line => {
+    const words = line.split(/\s+/).filter(Boolean);
+    if (!words.length) { pieces.push({ w: '', sep: '<br>' }); return; }
+    words.forEach((w, wi) => pieces.push({ w, sep: wi === 0 ? '<br>' : ' ' }));
+  });
   const chunks = [];
   let current = '';
-  const p = document.createElement('p');
+  const p = paraElement({ cls: para.cls, html: '' });
   el.appendChild(p);
-  for (const w of words) {
-    const attempt = current ? current + ' ' + w : w;
-    p.textContent = attempt;
+  for (const { w, sep } of pieces) {
+    const attempt = current ? current + sep + w : w;
+    p.innerHTML = attempt;
     if (!measurerFits(el) && current) {
       chunks.push(current);
       current = w;
-      p.textContent = current;
+      p.innerHTML = current;
     } else {
       current = attempt;
     }
   }
   if (current) chunks.push(current);
   el.removeChild(p);
-  return chunks.length ? chunks : [text];
+  return chunks.length ? balanceChunks(chunks).map(html => ({ cls: para.cls, html })) : [para];
 }
 
 function paginateBook() {
@@ -1439,32 +1526,27 @@ function paginateBook() {
 
   for (let chapterIdx = 0; chapterIdx < currentBook.chapters.length; chapterIdx++) {
     const ch = currentBook.chapters[chapterIdx];
-    const paras = ch.paras.length ? ch.paras : [''];
+    const paras = ch.paras.length ? ch.paras : [{ cls: '', html: '' }];
 
     let pageParas = [];
     let pageHasHeader = true;
 
     const startFreshPage = (withHeader) => {
-      el.innerHTML = '';
-      if (withHeader) {
-        if (ch.label) { const d = document.createElement('div'); d.className = 'chapter-label'; d.textContent = ch.label; el.appendChild(d); }
-        if (ch.title) { const d = document.createElement('div'); d.className = 'chapter-title'; d.textContent = ch.title; el.appendChild(d); }
-      }
+      el.innerHTML = withHeader ? chapterHeaderHtml(ch.label, ch.title) : '';
     };
     const pushPage = () => {
-      pages.push({ chapterIdx, label: pageHasHeader ? (ch.label || '') : '', title: pageHasHeader ? (ch.title || '') : '', paras: pageParas });
+      pages.push({ chapterIdx, label: pageHasHeader ? ch.label : '', title: pageHasHeader ? ch.title : '', paras: pageParas });
     };
 
     startFreshPage(true);
 
     for (let pi = 0; pi < paras.length; pi++) {
-      const text = paras[pi];
-      const p = document.createElement('p');
-      p.textContent = text;
+      const para = paras[pi];
+      const p = paraElement(para);
       el.appendChild(p);
 
       if (measurerFits(el)) {
-        pageParas.push(text);
+        pageParas.push(para);
         continue;
       }
 
@@ -1476,14 +1558,12 @@ function paginateBook() {
 
       el.appendChild(p);
       if (measurerFits(el)) {
-        pageParas.push(text);
+        pageParas.push(para);
       } else {
         el.removeChild(p);
-        const chunks = splitLongParagraph(el, text);
+        const chunks = splitLongParagraph(el, para);
         chunks.forEach((chunk, ci) => {
-          const cp = document.createElement('p');
-          cp.textContent = chunk;
-          el.appendChild(cp);
+          el.appendChild(paraElement(chunk));
           pageParas.push(chunk);
           if (ci < chunks.length - 1) {
             pushPage();
@@ -1503,7 +1583,7 @@ function paginateBook() {
 function currentPageAnchor() {
   const page = GLOBAL_PAGES[currentPageIdx];
   if (!page) return null;
-  return { chapterIdx: page.chapterIdx, firstPara: page.paras[0] ?? null };
+  return { chapterIdx: page.chapterIdx, firstPara: page.paras[0]?.html ?? null };
 }
 
 function findPageIndexForAnchor(anchor) {
@@ -1511,7 +1591,7 @@ function findPageIndexForAnchor(anchor) {
   const chapterStart = GLOBAL_PAGES.findIndex(pg => pg.chapterIdx === anchor.chapterIdx);
   if (chapterStart === -1) return 0;
   if (anchor.firstPara != null) {
-    const exact = GLOBAL_PAGES.findIndex(pg => pg.chapterIdx === anchor.chapterIdx && pg.paras.includes(anchor.firstPara));
+    const exact = GLOBAL_PAGES.findIndex(pg => pg.chapterIdx === anchor.chapterIdx && pg.paras.some(p => p.html === anchor.firstPara));
     if (exact !== -1) return exact;
   }
   return chapterStart;
@@ -1531,11 +1611,8 @@ function renderCurrentPage() {
   const content = document.getElementById('pageContent');
   content.className = 'page-content' + (currentBook.rtl ? ' rtl' : '') + (currentBook.devanagari ? ' devanagari' : '') + (currentBook.gurmukhi ? ' gurmukhi' : '');
   content.style.fontSize = fontSize + 'px';
-  content.innerHTML = `
-    ${page.label ? `<div class="chapter-label">${page.label}</div>` : ''}
-    ${page.title ? `<div class="chapter-title">${page.title}</div>` : ''}
-    ${page.paras.map(t => `<p>${t}</p>`).join('')}
-  `;
+  content.innerHTML = chapterHeaderHtml(page.label, page.title)
+    + page.paras.map(p => `<p${p.cls ? ` class="${p.cls}"` : ''}>${p.html}</p>`).join('');
   document.getElementById('pageIndicator').textContent = `Page ${currentPageIdx + 1} of ${GLOBAL_PAGES.length}`;
   const pct = GLOBAL_PAGES.length > 1 ? (currentPageIdx / (GLOBAL_PAGES.length - 1)) * 100 : 100;
   document.getElementById('progressFill').style.width = pct + '%';
