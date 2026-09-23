@@ -622,7 +622,9 @@
         <h3>Contact Details</h3>
         <div class="form-grid">
           <div class="form-field full"><label>Contact email</label><input type="email" id="settingsContactEmail" placeholder="you@example.com"></div>
-          <div class="form-field full"><label>Contact phone (optional, not shown on the site yet)</label><input type="text" id="settingsContactPhone" placeholder="+91 90000 00000"></div>
+          <div class="form-field full"><label>Contact phone (shown on the Contact Us page and in the policies)</label><input type="text" id="settingsContactPhone" placeholder="+91 90000 00000"></div>
+          <div class="form-field full"><label>Business / legal name (shown as "Operated by" — should match your payment gateway account)</label><input type="text" id="settingsBusinessName" placeholder="e.g. Your Business Name (Proprietor: Your Name)"></div>
+          <div class="form-field full"><label>Business address (shown on the Contact Us page — hidden while blank)</label><textarea id="settingsBusinessAddress" placeholder="Street, area&#10;City, State PIN&#10;India"></textarea></div>
         </div>
       </div>
 
@@ -644,7 +646,10 @@
         <div class="form-grid">
           <div class="form-field full"><label>Terms &amp; Conditions</label><textarea id="settingsTermsText" style="min-height:160px;"></textarea></div>
           <div class="form-field full"><label>Privacy Policy</label><textarea id="settingsPrivacyText" style="min-height:160px;"></textarea></div>
+          <div class="form-field full"><label>Refund &amp; Cancellation Policy</label><textarea id="settingsRefundText" style="min-height:160px;"></textarea></div>
+          <div class="form-field full"><label>Delivery Policy</label><textarea id="settingsDeliveryText" style="min-height:160px;"></textarea></div>
         </div>
+        <p style="font-size:11.5px;color:var(--text-on-ink-dim);margin-top:10px;">In the Refund and Delivery texts, <strong>{business_name}</strong>, <strong>{contact_email}</strong> and <strong>{contact_phone}</strong> are replaced with your Contact Details above, so you only change them in one place.</p>
       </div>
 
       <div class="panel-block">
@@ -818,6 +823,10 @@ function renderSettings() {
   document.getElementById('settingsFooterText').value = SETTINGS.footer_text || '';
   document.getElementById('settingsTermsText').value = SETTINGS.terms_text || '';
   document.getElementById('settingsPrivacyText').value = SETTINGS.privacy_text || '';
+  document.getElementById('settingsRefundText').value = SETTINGS.refund_text || '';
+  document.getElementById('settingsDeliveryText').value = SETTINGS.delivery_text || '';
+  document.getElementById('settingsBusinessName').value = SETTINGS.business_name || '';
+  document.getElementById('settingsBusinessAddress').value = SETTINGS.business_address || '';
   document.getElementById('settingsAccentColor').value = SETTINGS.accent_color || '#F0C25E';
   if (SETTINGS.logo_url) {
     document.getElementById('settingsLogoPreview').src = SETTINGS.logo_url;
@@ -869,6 +878,10 @@ async function saveSettings() {
     { key: 'footer_text', value: document.getElementById('settingsFooterText').value.trim() },
     { key: 'terms_text', value: document.getElementById('settingsTermsText').value.trim() },
     { key: 'privacy_text', value: document.getElementById('settingsPrivacyText').value.trim() },
+    { key: 'refund_text', value: document.getElementById('settingsRefundText').value.trim() },
+    { key: 'delivery_text', value: document.getElementById('settingsDeliveryText').value.trim() },
+    { key: 'business_name', value: document.getElementById('settingsBusinessName').value.trim() },
+    { key: 'business_address', value: document.getElementById('settingsBusinessAddress').value.trim() },
     { key: 'accent_color', value: document.getElementById('settingsAccentColor').value },
     { key: 'logo_url', value: logoUrl },
   ]);

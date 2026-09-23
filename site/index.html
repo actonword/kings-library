@@ -270,15 +270,27 @@
     text-align: center; padding: 30px 24px; border-top: 1px solid rgba(233,226,208,0.06);
     font-size: 12px; color: var(--text-on-ink-dim);
   }
-  .footer-links { margin-top: 10px; display: flex; gap: 16px; justify-content: center; }
+  .footer-links { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; }
   .footer-links button {
     background: none; border: none; cursor: pointer; padding: 0;
     font-size: 11.5px; color: var(--text-on-ink-dim); text-decoration: underline;
   }
   .footer-links button:hover { color: var(--gold-bright); }
-  #termsSection, #privacySection { max-width: 700px; margin: 0 auto; padding: 70px 24px 100px; }
-  #termsSection h2, #privacySection h2 { font-family: var(--serif); font-size: 26px; font-weight: 600; margin-bottom: 18px; }
-  #termsSection p, #privacySection p { font-size: 14px; color: var(--text-on-ink-dim); line-height: 1.8; margin-bottom: 14px; }
+  #termsSection, #privacySection, #refundSection, #deliverySection, #contactSection { max-width: 700px; margin: 0 auto; padding: 70px 24px 100px; }
+  #termsSection h2, #privacySection h2, #refundSection h2, #deliverySection h2, #contactSection h2 { font-family: var(--serif); font-size: 26px; font-weight: 600; margin-bottom: 18px; }
+  #termsSection p, #privacySection p, #refundSection p, #deliverySection p, #contactSection p { font-size: 14px; color: var(--text-on-ink-dim); line-height: 1.8; margin-bottom: 14px; }
+  #refundSection a, #deliverySection a, #contactSection a { color: var(--gold-bright); }
+  .contact-card {
+    border: 1px solid rgba(233,226,208,0.1); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 18px;
+  }
+  .contact-row { display: flex; gap: 14px; padding: 8px 0; font-size: 14px; line-height: 1.6; }
+  .contact-row + .contact-row { border-top: 1px solid rgba(233,226,208,0.06); }
+  .contact-row-label { flex: 0 0 110px; color: var(--text-on-ink-dim); }
+  .contact-row-value { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
+  @media (max-width: 480px) {
+    .contact-row { flex-direction: column; gap: 2px; }
+    .contact-row-label { flex: none; font-size: 12px; }
+  }
   .legal-back-link {
     display: inline-flex; align-items: center; gap: 6px; background: none; border: none; cursor: pointer;
     color: var(--text-on-ink-dim); font-family: var(--sans); font-size: 13px; margin-bottom: 24px;
@@ -493,11 +505,45 @@
     <div id="privacyParagraphs"></div>
   </section>
 
+  <!-- REFUND & CANCELLATION POLICY -->
+  <section id="refundSection">
+    <button class="legal-back-link" onclick="showSection('home')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      <span id="refundBackLabel">Back</span>
+    </button>
+    <h2 id="refundH2">Refund &amp; Cancellation Policy</h2>
+    <div id="refundParagraphs"></div>
+  </section>
+
+  <!-- DELIVERY POLICY -->
+  <section id="deliverySection">
+    <button class="legal-back-link" onclick="showSection('home')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      <span id="deliveryBackLabel">Back</span>
+    </button>
+    <h2 id="deliveryH2">Delivery Policy</h2>
+    <div id="deliveryParagraphs"></div>
+  </section>
+
+  <!-- CONTACT US -->
+  <section id="contactSection">
+    <button class="legal-back-link" onclick="showSection('home')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      <span id="contactBackLabel">Back</span>
+    </button>
+    <h2 id="contactH2">Contact Us</h2>
+    <p id="contactIntro">Questions about a purchase, your access, or a refund? Get in touch — we usually reply within 1 working day.</p>
+    <div class="contact-card" id="contactCard"></div>
+  </section>
+
   <footer>
     <span id="siteFooter">© King's Library. All books remain the property of their respective authors.</span>
     <div class="footer-links">
       <button id="footerTermsBtn" onclick="showSection('terms')">Terms &amp; Conditions</button>
       <button id="footerPrivacyBtn" onclick="showSection('privacy')">Privacy Policy</button>
+      <button id="footerRefundBtn" onclick="showSection('refund')">Refund &amp; Cancellation Policy</button>
+      <button id="footerDeliveryBtn" onclick="showSection('delivery')">Delivery Policy</button>
+      <button id="footerContactBtn" onclick="showSection('contact')">Contact Us</button>
     </div>
   </footer>
 
@@ -549,6 +595,46 @@ function applySiteCustomizations() {
     const paras = SITE_SETTINGS.privacy_text.split(/\n\s*\n/).filter(Boolean);
     document.getElementById('privacyParagraphs').innerHTML = paras.map(p => `<p>${p}</p>`).join('');
   }
+  renderPolicyPage('refund_text', 'refundParagraphs');
+  renderPolicyPage('delivery_text', 'deliveryParagraphs');
+  renderContactCard();
+}
+
+function escapeSiteText(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* Policy texts can mention {business_name}, {contact_email} and {contact_phone};
+   these are filled in from the Contact settings so they only need changing in one place. */
+function renderPolicyPage(settingKey, containerId) {
+  const text = SITE_SETTINGS[settingKey];
+  if (!text) return;
+  const email = SITE_SETTINGS.contact_email || '';
+  const phone = SITE_SETTINGS.contact_phone || '';
+  const filled = text
+    .replace(/\{business_name\}/g, escapeSiteText(SITE_SETTINGS.business_name || "King's Library"))
+    .replace(/\{contact_email\}/g, email ? `<a href="mailto:${escapeSiteText(email)}">${escapeSiteText(email)}</a>` : 'the email on our Contact Us page')
+    .replace(/\{contact_phone\}/g, phone ? `<a href="tel:${escapeSiteText(phone.replace(/\s+/g, ''))}">${escapeSiteText(phone)}</a>` : 'the phone number on our Contact Us page');
+  const paras = filled.split(/\n\s*\n/).filter(Boolean);
+  document.getElementById(containerId).innerHTML = paras.map(p => `<p>${p}</p>`).join('');
+}
+
+function renderContactCard() {
+  const rows = [];
+  rows.push([tr('contactOperatedBy'), escapeSiteText(SITE_SETTINGS.business_name ? `King's Library — ${SITE_SETTINGS.business_name}` : "King's Library")]);
+  if (SITE_SETTINGS.contact_email) {
+    const e = escapeSiteText(SITE_SETTINGS.contact_email);
+    rows.push([tr('contactEmail'), `<a href="mailto:${e}">${e}</a>`]);
+  }
+  if (SITE_SETTINGS.contact_phone) {
+    const p = escapeSiteText(SITE_SETTINGS.contact_phone);
+    rows.push([tr('contactPhone'), `<a href="tel:${escapeSiteText(SITE_SETTINGS.contact_phone.replace(/\s+/g, ''))}">${p}</a>`]);
+  }
+  if (SITE_SETTINGS.business_address) rows.push([tr('contactAddress'), escapeSiteText(SITE_SETTINGS.business_address)]);
+  rows.push([tr('contactWebsite'), '<a href="https://kingslibrary.online">kingslibrary.online</a>']);
+  document.getElementById('contactCard').innerHTML = rows.map(([label, value]) =>
+    `<div class="contact-row"><div class="contact-row-label">${label}</div><div class="contact-row-value">${value}</div></div>`
+  ).join('');
 }
 
 /* ---------- Supabase-backed catalog ---------- */
@@ -588,9 +674,15 @@ async function loadPodcasts() {
 }
 
 /* ---------- Section navigation ---------- */
+// Policy/contact pages get their own address (e.g. kingslibrary.online/site/#refund) so
+// they can be linked directly — payment gateways ask for a URL for each policy.
+const LINKABLE_SECTIONS = ['terms', 'privacy', 'refund', 'delivery', 'contact'];
+
 function showSection(name) {
   document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
   document.getElementById(name + 'Section').classList.add('active');
+  const wantedHash = LINKABLE_SECTIONS.includes(name) ? '#' + name : '';
+  if (location.hash !== wantedHash) history.replaceState(null, '', location.pathname + location.search + wantedHash);
   document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
   const navBtn = document.querySelector(`.nav-links button[data-nav="${name}"]`);
   if (navBtn) navBtn.classList.add('active');
@@ -983,7 +1075,16 @@ const UI_STRINGS = {
     share: "Share",
     legalBack: "Back",
     termsLabel: "Terms & Conditions",
-    privacyLabel: "Privacy Policy"
+    privacyLabel: "Privacy Policy",
+    refundLabel: "Refund & Cancellation Policy",
+    deliveryLabel: "Delivery Policy",
+    contactLabel: "Contact Us",
+    contactIntro: "Questions about a purchase, your access, or a refund? Get in touch — we usually reply within 1 working day.",
+    contactOperatedBy: "Operated by",
+    contactEmail: "Email",
+    contactPhone: "Phone",
+    contactAddress: "Address",
+    contactWebsite: "Website"
   },
   hi: {
     code: "हिं",
@@ -1026,7 +1127,16 @@ const UI_STRINGS = {
     share: "साझा करें",
     legalBack: "वापस",
     termsLabel: "नियम और शर्तें",
-    privacyLabel: "गोपनीयता नीति"
+    privacyLabel: "गोपनीयता नीति",
+    refundLabel: "रिफंड और रद्दीकरण नीति",
+    deliveryLabel: "डिलीवरी नीति",
+    contactLabel: "संपर्क करें",
+    contactIntro: "खरीदारी, एक्सेस या रिफंड के बारे में कोई सवाल? हमसे संपर्क करें — हम आमतौर पर 1 कार्य दिवस में जवाब देते हैं।",
+    contactOperatedBy: "संचालक",
+    contactEmail: "ईमेल",
+    contactPhone: "फ़ोन",
+    contactAddress: "पता",
+    contactWebsite: "वेबसाइट"
   },
   pa: {
     code: "ਪੰ",
@@ -1069,7 +1179,16 @@ const UI_STRINGS = {
     share: "ਸਾਂਝਾ ਕਰੋ",
     legalBack: "ਵਾਪਸ",
     termsLabel: "ਨਿਯਮ ਅਤੇ ਸ਼ਰਤਾਂ",
-    privacyLabel: "ਪਰਦੇਦਾਰੀ ਨੀਤੀ"
+    privacyLabel: "ਪਰਦੇਦਾਰੀ ਨੀਤੀ",
+    refundLabel: "ਰਿਫੰਡ ਅਤੇ ਰੱਦ ਕਰਨ ਦੀ ਨੀਤੀ",
+    deliveryLabel: "ਡਿਲੀਵਰੀ ਨੀਤੀ",
+    contactLabel: "ਸੰਪਰਕ ਕਰੋ",
+    contactIntro: "ਖਰੀਦਦਾਰੀ, ਐਕਸੈਸ ਜਾਂ ਰਿਫੰਡ ਬਾਰੇ ਕੋਈ ਸਵਾਲ? ਸਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੋ — ਅਸੀਂ ਆਮ ਤੌਰ 'ਤੇ 1 ਕੰਮਕਾਜੀ ਦਿਨ ਵਿੱਚ ਜਵਾਬ ਦਿੰਦੇ ਹਾਂ।",
+    contactOperatedBy: "ਸੰਚਾਲਕ",
+    contactEmail: "ਈਮੇਲ",
+    contactPhone: "ਫ਼ੋਨ",
+    contactAddress: "ਪਤਾ",
+    contactWebsite: "ਵੈੱਬਸਾਈਟ"
   }
 };
 
@@ -1132,6 +1251,12 @@ function applyTranslations() {
   setText('privacyH2', s.privacyLabel);
   setText('footerTermsBtn', s.termsLabel);
   setText('footerPrivacyBtn', s.privacyLabel);
+  ['refund', 'delivery', 'contact'].forEach(page => {
+    setText(page + 'BackLabel', s.legalBack);
+    setText(page + 'H2', s[page + 'Label']);
+    setText('footer' + page.charAt(0).toUpperCase() + page.slice(1) + 'Btn', s[page + 'Label']);
+  });
+  setText('contactIntro', s.contactIntro);
 
   renderGrid();
   renderPodcastGrid();
@@ -1158,6 +1283,13 @@ async function init() {
   applySiteCustomizations();
 }
 init();
+
+function openSectionFromHash() {
+  const name = location.hash.replace('#', '');
+  if (LINKABLE_SECTIONS.includes(name)) showSection(name);
+}
+openSectionFromHash();
+window.addEventListener('hashchange', openSectionFromHash);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
