@@ -2,7 +2,7 @@
 // basic offline fallback for the site shell. Never touches cross-origin requests
 // (Supabase API/storage, the Supabase JS CDN script) so data is always fresh.
 const CACHE_NAME = 'kl-site-shell-v1';
-const SHELL_URLS = ['./', './index.html', '../shared/supabaseClient.js'];
+const SHELL_URLS = ['./', './index.html', './logo.png', '../shared/supabaseClient.js'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
