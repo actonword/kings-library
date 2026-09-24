@@ -1911,9 +1911,38 @@ function renderReadersTable() {
           </span>`).join('')}
         ${!r.items.length ? '<span class="badge-locked">Nothing yet</span>' : ''}
       </td>
-      <td><button class="btn btn-outline btn-tiny" onclick="removeReader('${r.id}')">Revoke All Access</button></td>
+      <td style="white-space:nowrap;">
+        ${r.items.length ? `<button class="btn btn-outline btn-tiny" onclick="removeReader('${r.id}')">Revoke All Access</button>` : ''}
+        <button class="btn btn-danger-outline btn-tiny" onclick="deleteReader('${r.id}')" title="Permanently delete this email's account">Delete</button>
+      </td>
     </tr>
   `).join('');
+}
+
+/* Permanently remove a reader's account — e.g. an email added by mistake, or one that's
+   no longer used. Done by the delete-reader Edge Function (needs the service role). */
+async function deleteReader(readerId) {
+  const r = READERS.find(x => x.id === readerId);
+  if (!r) return;
+  const owned = r.items.length
+    ? `\n\n⚠ This reader still owns ${r.items.length} item${r.items.length === 1 ? '' : 's'}: ${r.items.map(i => i.title).join(', ')}. They will lose access, and their reading progress will be erased.`
+    : '';
+  if (!confirm(`Permanently delete the account ${r.email}?${owned}\n\nThis can't be undone. If this person needs access again later, just grant it to their email — a new account is created automatically.`)) return;
+  showToast(`Deleting ${r.email}…`);
+  const { data, error } = await sb.functions.invoke('delete-reader', { body: { readerId } });
+  if (error || data?.error) {
+    const msg = data?.error || error.message;
+    showToast(/not found|404|Failed to send/i.test(msg) && !data?.error
+      ? 'Delete isn\'t switched on yet — the "delete-reader" function needs to be deployed.'
+      : 'Could not delete: ' + msg);
+    return;
+  }
+  await loadReaders();
+  await loadLog();
+  renderReadersTable();
+  renderDashboard();
+  renderFullLog();
+  showToast(`Deleted ${r.email}.`);
 }
 
 async function revokeOne(readerId, itemType, itemId) {
