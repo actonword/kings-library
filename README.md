@@ -106,7 +106,9 @@ don't set it back to false, it will silently break every reader's sign-in.
 `kingslibrary.online` is verified in Resend as of 2026-09-21. `RESEND_FROM_EMAIL` is
 set to `King's Library <hello@kingslibrary.online>` (applies to the custom emails sent
 by `grant-access`/`send-notification`). The OTP/magic-link sender (`admin_email` in
-Supabase's SMTP settings) still needs updating to the same address — **do this via the
+Supabase's SMTP settings — dashboard label "Sender email address", under
+Authentication → Emails → SMTP Settings) was updated to the same address via the
+dashboard around 2026-09-22; `config.toml` now matches. Keep changing it **only via the
 dashboard**, not `config push` (see landmine above), since it's the exact setting that
 trips the email-provider-reset bug.
 
@@ -133,8 +135,9 @@ to hand out). `/site/`, `/app/`, `/admin/` are the three front ends either way.
 - [x] GitHub repo created and pushed (`actonword/kings-library`), GitHub Pages live
 - [x] Custom domain `kingslibrary.online` — DNS live at Hostinger, HTTPS provisioning
 - [x] Domain verified in Resend; `RESEND_FROM_EMAIL` updated to hello@kingslibrary.online
-- [ ] Update OTP sender (`admin_email`) to hello@kingslibrary.online in the Supabase
-      dashboard's SMTP settings (not yet done — do this via dashboard, not config push)
+- [x] Update OTP sender (`admin_email`) to hello@kingslibrary.online in the Supabase
+      dashboard's SMTP settings (done via dashboard ~2026-09-22 — confirm by checking
+      the From: of a 6-digit sign-in code email)
 - [ ] Once HTTPS is confirmed live on kingslibrary.online: update Site URL/Redirect URLs
       in the dashboard, redeploy Edge Functions so APP_URL picks up the new domain, and
       switch reader-facing links (grant emails, PWA) over from actonword.github.io

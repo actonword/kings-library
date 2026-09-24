@@ -256,8 +256,9 @@ port = 465
 user = "resend"
 # Set via: $env:RESEND_SMTP_PASS = "<your Resend API key>"  (do this in your own terminal, not in chat)
 pass = "env(RESEND_SMTP_PASS)"
-# Must be an address on a domain verified in Resend, or onboarding@resend.dev for quick testing.
-admin_email = "onboarding@resend.dev"
+# Must be an address on a domain verified in Resend (kingslibrary.online is verified).
+# Keep in sync with the dashboard: Authentication → Emails → SMTP Settings → Sender email.
+admin_email = "hello@kingslibrary.online"
 sender_name = "King's Library"
 
 # Custom template so the sign-in email shows the 6-digit code instead of a magic link,
