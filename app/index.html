@@ -637,12 +637,16 @@
   .page-content p.pf-split-head { margin-bottom: 0; }
   .page-content p.pf-split-head:not(.pf-left):not(.pf-center):not(.pf-right) { text-align-last: justify; }
   .page-content p.pf-split-tail { text-indent: 0; }
-  /* A chapter that starts part-way down a page, below the previous chapter's ending */
-  .page-content .chapter-head-inline { position: relative; margin-top: 1.6em; padding-top: 1.5em; }
-  .page-content .chapter-head-inline::before {
-    content: '✦'; position: absolute; top: 0; left: 0; right: 0; text-align: center;
-    color: var(--gold); font-size: 0.8em; line-height: 1;
+  /* The book's Contents page (see contentsEntries): one tappable line per chapter */
+  .page-content p.pf-toc {
+    text-align: left; text-indent: 0; margin-bottom: 0; padding: 9px 2px;
+    border-bottom: 1px dotted rgba(36,30,20,0.18); cursor: pointer; line-height: 1.4;
   }
+  .page-content p.pf-toc .toc-label { display: block; font-size: 0.72em; font-weight: 700; letter-spacing: 0.06em; color: var(--gold); }
+  .page-content p.pf-toc .toc-title { display: block; }
+  .page-content p.pf-toc:hover .toc-title { color: var(--gold); }
+  .reader-view.dark .page-content p.pf-toc { border-bottom-color: rgba(220,211,188,0.18); }
+  .page-content.rtl p.pf-toc { text-align: right; }
   .page-content p b, .page-content .chapter-title b, .page-content .chapter-label b { font-weight: 700; }
   .page-content.rtl { direction: rtl; }
   .page-content.rtl p, .page-content.rtl .chapter-title { font-family: 'Noto Nastaliq Urdu', var(--serif); }
@@ -1561,12 +1565,11 @@ function balanceChunks(chunks) {
 }
 
 /* ---------- Book-style page flow ----------
-   The whole book flows continuously, like a printed book, so pages don't end half empty:
-   - a paragraph that doesn't fit at the bottom of a page is split — its first lines fill
-     this page and the rest continues on the next (only if at least two lines fit);
-   - a new chapter starts on the same page when there is room, under a small ornament.
-     A chapter heading is never left alone at the foot of a page.
-   A page is a list of blocks: { type: 'header', chapterIdx, label, title, inline } or
+   Like a printed book: every chapter (and front-matter section — copyright, dedication,
+   contents…) starts on a new page, and within a chapter pages don't end half empty —
+   a paragraph that doesn't fit at the bottom of a page is split, its first lines filling
+   this page and the rest continuing on the next (only if at least two lines fit).
+   A page is a list of blocks: { type: 'header', chapterIdx, label, title } or
    { type: 'para', chapterIdx, paraIdx, para, cont } (cont = continues from the page before). */
 
 // Words and <br> line breaks of a paragraph. Sanitized html has no attributes, so
@@ -1624,9 +1627,25 @@ function splitParagraphToFit(el, para, minLines) {
 
 function blockHtml(b) {
   if (b.type === 'header') {
-    return `<div class="chapter-head${b.inline ? ' chapter-head-inline' : ''}">${chapterHeaderHtml(b.label, b.title)}</div>`;
+    return `<div class="chapter-head">${chapterHeaderHtml(b.label, b.title)}</div>`;
   }
-  return `<p${b.para.cls ? ` class="${b.para.cls}"` : ''}>${b.para.html}</p>`;
+  const jump = b.para.jumpTo != null ? ` data-jump-chapter="${b.para.jumpTo}" role="button" tabindex="0"` : '';
+  return `<p${b.para.cls ? ` class="${b.para.cls}"` : ''}${jump}>${b.para.html}</p>`;
+}
+
+/* A paragraph that is exactly [[contents]] (set by the admin's Word import for a book's
+   CONTENTS page) becomes the list of the sections and chapters that follow it. */
+const CONTENTS_MARKER = '[[contents]]';
+function contentsEntries(fromChapterIdx) {
+  return currentBook.chapters
+    .map((ch, i) => ({ ch, i }))
+    .filter(({ ch, i }) => i > fromChapterIdx && (ch.label || ch.title))
+    .map(({ ch, i }) => ({
+      cls: 'pf-toc',
+      // label/title are already sanitized (see openBook)
+      html: ch.label && ch.title ? `<span class="toc-label">${ch.label}</span><span class="toc-title">${ch.title}</span>` : `<span class="toc-title">${ch.label || ch.title}</span>`,
+      jumpTo: i,
+    }));
 }
 
 function paginateBook() {
@@ -1659,26 +1678,22 @@ function paginateBook() {
     return false;
   };
 
-  const placePara = (block, header) => {
+  const placePara = (block) => {
     if (tryPlace(block)) return;
-    const split = blocks.length ? splitParagraphToFit(el, block.para, 2) : null;
+    // Contents lines are never split (they carry their own markup); they just move on.
+    const splittable = block.para.jumpTo == null;
+    const split = splittable && blocks.length ? splitParagraphToFit(el, block.para, 2) : null;
     if (split) {
       // Fill the rest of this page with the paragraph's opening lines.
       place({ ...block, para: split[0] });
       flush();
       block = { ...block, para: split[1], cont: true };
-    } else if (header && blocks.length > 1 && blocks[blocks.length - 1] === header) {
-      // Not even two lines fit under a new chapter heading — move the heading along too.
-      blocks.pop();
-      flush();
-      header.inline = false;
-      place(header);
     } else {
       flush();
     }
     // Continue on the next page(s); a paragraph taller than a whole page keeps splitting.
     while (!tryPlace(block)) {
-      const s = splitParagraphToFit(el, block.para, 1);
+      const s = splittable ? splitParagraphToFit(el, block.para, 1) : null;
       if (!s) { place(block); break; } // a single unbreakable line — show it rather than loop
       place({ ...block, para: s[0] });
       flush();
@@ -1687,12 +1702,17 @@ function paginateBook() {
   };
 
   currentBook.chapters.forEach((ch, chapterIdx) => {
-    let header = null;
-    if (ch.label || ch.title) {
-      header = { type: 'header', chapterIdx, label: ch.label, title: ch.title, inline: blocks.length > 0 };
-      if (!tryPlace(header)) { flush(); header.inline = false; place(header); }
-    }
-    ch.paras.forEach((para, paraIdx) => placePara({ type: 'para', chapterIdx, paraIdx, para }, header));
+    flush(); // every chapter (and front-matter section) starts on a new page
+    if (ch.label || ch.title) place({ type: 'header', chapterIdx, label: ch.label, title: ch.title });
+    ch.paras.forEach((para, paraIdx) => {
+      if (para.html === CONTENTS_MARKER) {
+        // The book's chapter list: one tappable line per later section/chapter.
+        contentsEntries(chapterIdx).forEach((entry, n) =>
+          placePara({ type: 'para', chapterIdx, paraIdx, para: entry, cont: n > 0 }));
+      } else {
+        placePara({ type: 'para', chapterIdx, paraIdx, para });
+      }
+    });
   });
   flush();
   if (!pages.length) pages.push({ blocks: [], chapterIdx: 0, startPara: 0 });
@@ -1777,6 +1797,17 @@ document.getElementById('prevZone').addEventListener('click', () => { if (Date.n
 document.getElementById('nextZone').addEventListener('click', () => { if (Date.now() >= suppressZoneClickUntil) goNextPage(); });
 document.getElementById('arrowPrevBtn').addEventListener('click', goPrevPage);
 document.getElementById('arrowNextBtn').addEventListener('click', goNextPage);
+// Tapping a line on the book's Contents page jumps to that chapter.
+function jumpFromContentsLine(target) {
+  const line = target.closest('[data-jump-chapter]');
+  if (!line || Date.now() < suppressZoneClickUntil) return;
+  currentPageIdx = chapterStartPageIndex(Number(line.dataset.jumpChapter));
+  renderCurrentPage();
+}
+document.getElementById('pageContent').addEventListener('click', (e) => jumpFromContentsLine(e.target));
+document.getElementById('pageContent').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jumpFromContentsLine(e.target); }
+});
 document.getElementById('pageSlider').addEventListener('input', (e) => {
   currentPageIdx = Number(e.target.value);
   renderCurrentPage();

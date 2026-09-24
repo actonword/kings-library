@@ -448,7 +448,7 @@
         </div>
 
         <h3 style="font-family:var(--serif);font-size:15px;font-weight:600;margin-bottom:6px;">Chapters</h3>
-        <p style="font-size:12px;color:var(--text-on-ink-dim);margin-bottom:14px;">Formatting from Word files is kept as small tags: &lt;b&gt;bold&lt;/b&gt;, &lt;i&gt;italic&lt;/i&gt;, &lt;u&gt;underline&lt;/u&gt;, &lt;br&gt; for a line break, and &lt;p class="center"&gt;…&lt;/p&gt; for a centered paragraph. You can type these yourself too. Leave a blank line between paragraphs.</p>
+        <p style="font-size:12px;color:var(--text-on-ink-dim);margin-bottom:14px;">Formatting from Word files is kept as small tags: &lt;b&gt;bold&lt;/b&gt;, &lt;i&gt;italic&lt;/i&gt;, &lt;u&gt;underline&lt;/u&gt;, &lt;br&gt; for a line break, and &lt;p class="center"&gt;…&lt;/p&gt; for a centered paragraph. You can type these yourself too. Leave a blank line between paragraphs. A paragraph containing only <strong>[[contents]]</strong> shows the book's chapter list (readers can tap a chapter to jump to it).</p>
         <div class="form-field full" style="margin-bottom:18px;">
           <label>Replace all chapters from a book file — EPUB, Word (.docx), PDF, or text (.txt)</label>
           <div class="upload-box" id="replaceChaptersUploadBox">
@@ -2161,6 +2161,37 @@ function isHeadingLine(line) {
 
 /* blocks: [{ text, heading }] in reading order, where heading=true marks a chapter start.
    Tiny sections (table-of-contents entries, blank title pages) are dropped. */
+/* Front matter: the pages before the first chapter (title page, copyright, dedication,
+   about this book, contents…). Each heading like "COPYRIGHT" starts its own section, so
+   the reader shows each on its own page. A Contents section gets the [[contents]] marker,
+   which the reader app turns into the book's chapter list (the file's own list of
+   chapter lines can't be kept — they look exactly like chapter headings). */
+const FRONT_MATTER_HEADING_RE = /^(title page|half title|copyright( page)?|dedication|acknowledge?ments?|dedication\s*(&|and)\s*acknowledge?ments?|acknowledge?ments?\s*(&|and)\s*dedication|about (this|the) book|about the author|foreword|preface|prologue|introduction|contents|table of contents|epigraph|author'?s note|a note (to|for) the reader|समर्पण|आभार|प्रस्तावना|भूमिका|विषय[- ]?सूची|अनुक्रमणिका|ਤਤਕਰਾ|ਸਮਰਪਣ|ਧੰਨਵਾਦ|ਭੂਮਿਕਾ)$/i;
+const CONTENTS_HEADING_RE = /^(contents|table of contents|विषय[- ]?सूची|अनुक्रमणिका|ਤਤਕਰਾ)$/i;
+const CONTENTS_MARKER = '[[contents]]';
+
+function splitFrontMatter(preface, plainOf) {
+  const sections = [{ label: 'Introduction', blocks: [] }];
+  for (const b of preface) {
+    const heading = plainOf(b).replace(/\s+/g, ' ').replace(/[.:]$/, '').trim();
+    if (heading.length <= 60 && FRONT_MATTER_HEADING_RE.test(heading)) sections.push({ label: heading, blocks: [] });
+    else sections[sections.length - 1].blocks.push(b);
+  }
+  if (sections.slice(1).some(s => /^introduction$/i.test(s.label))) sections[0].label = 'Title Page';
+  const result = [];
+  sections.forEach((s, i) => {
+    if (CONTENTS_HEADING_RE.test(s.label)) {
+      result.push({ label: s.label, title: null, content: CONTENTS_MARKER });
+      return;
+    }
+    const text = s.blocks.map(b => b.text).join('\n\n').trim();
+    const plainLength = s.blocks.map(plainOf).join('').length;
+    // Keep every titled section; the untitled opening part only if it has real text.
+    if (i > 0 ? plainLength > 0 : plainLength >= 20) result.push({ label: s.label, title: null, content: text });
+  });
+  return result;
+}
+
 function blocksToChapters(blocks) {
   // Blocks from plain text have only .text; blocks from Word also carry .plain (text
   // without formatting tags, used for detection) and .subheading (a smaller heading style).
@@ -2178,9 +2209,7 @@ function blocksToChapters(blocks) {
       preface.push(b);
     }
   }
-  const result = [];
-  const prefaceText = preface.map(b => b.text).join('\n\n').trim();
-  if (preface.map(plainOf).join('').length >= 300) result.push({ label: 'Introduction', title: null, content: prefaceText });
+  const result = splitFrontMatter(preface, plainOf);
   for (const c of chapters) {
     // "Chapter 3" followed by a short line (or a smaller heading) is usually the chapter's name — use it as the title.
     let title = null;
