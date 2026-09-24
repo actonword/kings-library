@@ -632,6 +632,17 @@
   .page-content p.pf-indent { text-indent: 1.6em; }
   .page-content p.pf-inset { margin-left: 2em; margin-right: 2em; }
   .page-content p.pf-tight { margin-bottom: 0; }
+  /* A paragraph split across two pages (see splitParagraphToFit): the first part's last
+     line stays justified and has no gap below; the continuation isn't indented again. */
+  .page-content p.pf-split-head { margin-bottom: 0; }
+  .page-content p.pf-split-head:not(.pf-left):not(.pf-center):not(.pf-right) { text-align-last: justify; }
+  .page-content p.pf-split-tail { text-indent: 0; }
+  /* A chapter that starts part-way down a page, below the previous chapter's ending */
+  .page-content .chapter-head-inline { position: relative; margin-top: 1.6em; padding-top: 1.5em; }
+  .page-content .chapter-head-inline::before {
+    content: '✦'; position: absolute; top: 0; left: 0; right: 0; text-align: center;
+    color: var(--gold); font-size: 0.8em; line-height: 1;
+  }
   .page-content p b, .page-content .chapter-title b, .page-content .chapter-label b { font-weight: 700; }
   .page-content.rtl { direction: rtl; }
   .page-content.rtl p, .page-content.rtl .chapter-title { font-family: 'Noto Nastaliq Urdu', var(--serif); }
@@ -1549,34 +1560,73 @@ function balanceChunks(chunks) {
   });
 }
 
-/* A single paragraph too tall for one page (rare) is split at line breaks first
-   (keeps verses whole), then by words. Sanitized html has no attributes, so
-   splitting on whitespace never cuts through a tag. */
-function splitLongParagraph(el, para) {
+/* ---------- Book-style page flow ----------
+   The whole book flows continuously, like a printed book, so pages don't end half empty:
+   - a paragraph that doesn't fit at the bottom of a page is split — its first lines fill
+     this page and the rest continues on the next (only if at least two lines fit);
+   - a new chapter starts on the same page when there is room, under a small ornament.
+     A chapter heading is never left alone at the foot of a page.
+   A page is a list of blocks: { type: 'header', chapterIdx, label, title, inline } or
+   { type: 'para', chapterIdx, paraIdx, para, cont } (cont = continues from the page before). */
+
+// Words and <br> line breaks of a paragraph. Sanitized html has no attributes, so
+// splitting on whitespace never cuts through a tag.
+function paragraphPieces(html) {
   const pieces = [];
-  para.html.split('<br>').forEach(line => {
+  html.split('<br>').forEach((line, li) => {
     const words = line.split(/\s+/).filter(Boolean);
-    if (!words.length) { pieces.push({ w: '', sep: '<br>' }); return; }
-    words.forEach((w, wi) => pieces.push({ w, sep: wi === 0 ? '<br>' : ' ' }));
+    if (!words.length) { if (li > 0) pieces.push({ w: '', sep: '<br>' }); return; }
+    words.forEach((w, wi) => pieces.push({ w, sep: wi === 0 && li > 0 ? '<br>' : ' ' }));
   });
-  const chunks = [];
-  let current = '';
-  const p = paraElement({ cls: para.cls, html: '' });
+  return pieces;
+}
+
+function joinPieces(pieces) {
+  return pieces.map((p, i) => (i ? p.sep : '') + p.w).join('');
+}
+
+function withClasses(cls, add, remove = []) {
+  const set = new Set(String(cls || '').split(/\s+/).filter(Boolean));
+  remove.forEach(c => set.delete(c));
+  add.forEach(c => set.add(c));
+  return [...set].join(' ');
+}
+
+/* The largest opening part of `para` that fits in the space left on the page being
+   measured, as [head, tail] — or null if fewer than `minLines` lines would fit. */
+function splitParagraphToFit(el, para, minLines) {
+  const pieces = paragraphPieces(para.html);
+  if (pieces.length < 2) return null;
+  const headCls = withClasses(para.cls, ['pf-split-head']);
+  const p = paraElement({ cls: headCls, html: '' });
   el.appendChild(p);
-  for (const { w, sep } of pieces) {
-    const attempt = current ? current + sep + w : w;
-    p.innerHTML = attempt;
-    if (!measurerFits(el) && current) {
-      chunks.push(current);
-      current = w;
-      p.innerHTML = current;
-    } else {
-      current = attempt;
-    }
+  const fitsWith = (n) => { p.innerHTML = joinPieces(pieces.slice(0, n)); return measurerFits(el); };
+  // Binary search: more words only ever make it taller. Keep at least one word for the tail.
+  let lo = 0, hi = pieces.length - 1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (fitsWith(mid)) lo = mid; else hi = mid - 1;
   }
-  if (current) chunks.push(current);
+  let ok = lo > 0;
+  if (ok && minLines > 1) {
+    fitsWith(lo);
+    const lineHeight = parseFloat(getComputedStyle(p).lineHeight) || fontSize * 1.75;
+    ok = p.getBoundingClientRect().height >= lineHeight * minLines - 2;
+  }
   el.removeChild(p);
-  return chunks.length ? balanceChunks(chunks).map(html => ({ cls: para.cls, html })) : [para];
+  if (!ok) return null;
+  const [head, tail] = balanceChunks([joinPieces(pieces.slice(0, lo)), joinPieces(pieces.slice(lo))]);
+  return [
+    { cls: headCls, html: head },
+    { cls: withClasses(para.cls, ['pf-split-tail'], ['pf-indent', 'pf-split-head']), html: tail },
+  ];
+}
+
+function blockHtml(b) {
+  if (b.type === 'header') {
+    return `<div class="chapter-head${b.inline ? ' chapter-head-inline' : ''}">${chapterHeaderHtml(b.label, b.title)}</div>`;
+  }
+  return `<p${b.para.cls ? ` class="${b.para.cls}"` : ''}>${b.para.html}</p>`;
 }
 
 function paginateBook() {
@@ -1585,65 +1635,67 @@ function paginateBook() {
   document.getElementById('pageContent').className = 'page-content' + (currentBook.rtl ? ' rtl' : '') + (currentBook.devanagari ? ' devanagari' : '') + (currentBook.gurmukhi ? ' gurmukhi' : '');
   const el = preparePageMeasurer();
   const pages = [];
+  let blocks = [];
 
-  for (let chapterIdx = 0; chapterIdx < currentBook.chapters.length; chapterIdx++) {
-    const ch = currentBook.chapters[chapterIdx];
-    const paras = ch.paras.length ? ch.paras : [{ cls: '', html: '' }];
-
-    let pageParas = [];
-    let pageHasHeader = true;
-    let pageStartPara = null; // index (within the chapter) of the paragraph this page begins with
-
-    const startFreshPage = (withHeader) => {
-      el.innerHTML = withHeader ? chapterHeaderHtml(ch.label, ch.title) : '';
-      pageStartPara = null;
-    };
-    const addPara = (para, pi) => {
-      if (pageStartPara === null) pageStartPara = pi;
-      pageParas.push(para);
-    };
-    const pushPage = () => {
-      pages.push({ chapterIdx, startPara: pageStartPara ?? 0, label: pageHasHeader ? ch.label : '', title: pageHasHeader ? ch.title : '', paras: pageParas });
-    };
-
-    startFreshPage(true);
-
-    for (let pi = 0; pi < paras.length; pi++) {
-      const para = paras[pi];
-      const p = paraElement(para);
-      el.appendChild(p);
-
-      if (measurerFits(el)) {
-        addPara(para, pi);
-        continue;
-      }
-
-      el.removeChild(p);
-      pushPage();
-      pageParas = [];
-      pageHasHeader = false;
-      startFreshPage(false);
-
-      el.appendChild(p);
-      if (measurerFits(el)) {
-        addPara(para, pi);
-      } else {
-        el.removeChild(p);
-        const chunks = splitLongParagraph(el, para);
-        chunks.forEach((chunk, ci) => {
-          el.appendChild(paraElement(chunk));
-          addPara(chunk, pi);
-          if (ci < chunks.length - 1) {
-            pushPage();
-            pageParas = [];
-            pageHasHeader = false;
-            startFreshPage(false);
-          }
-        });
-      }
+  const flush = () => {
+    if (blocks.length) {
+      const first = blocks[0];
+      pages.push({ blocks, chapterIdx: first.chapterIdx, startPara: first.type === 'para' ? first.paraIdx : 0 });
     }
-    pushPage();
-  }
+    blocks = [];
+    el.innerHTML = '';
+  };
+  const place = (b) => {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = blockHtml(b);
+    el.appendChild(tpl.content.firstElementChild);
+    blocks.push(b);
+  };
+  const tryPlace = (b) => {
+    place(b);
+    if (measurerFits(el)) return true;
+    el.removeChild(el.lastElementChild);
+    blocks.pop();
+    return false;
+  };
+
+  const placePara = (block, header) => {
+    if (tryPlace(block)) return;
+    const split = blocks.length ? splitParagraphToFit(el, block.para, 2) : null;
+    if (split) {
+      // Fill the rest of this page with the paragraph's opening lines.
+      place({ ...block, para: split[0] });
+      flush();
+      block = { ...block, para: split[1], cont: true };
+    } else if (header && blocks.length > 1 && blocks[blocks.length - 1] === header) {
+      // Not even two lines fit under a new chapter heading — move the heading along too.
+      blocks.pop();
+      flush();
+      header.inline = false;
+      place(header);
+    } else {
+      flush();
+    }
+    // Continue on the next page(s); a paragraph taller than a whole page keeps splitting.
+    while (!tryPlace(block)) {
+      const s = splitParagraphToFit(el, block.para, 1);
+      if (!s) { place(block); break; } // a single unbreakable line — show it rather than loop
+      place({ ...block, para: s[0] });
+      flush();
+      block = { ...block, para: s[1], cont: true };
+    }
+  };
+
+  currentBook.chapters.forEach((ch, chapterIdx) => {
+    let header = null;
+    if (ch.label || ch.title) {
+      header = { type: 'header', chapterIdx, label: ch.label, title: ch.title, inline: blocks.length > 0 };
+      if (!tryPlace(header)) { flush(); header.inline = false; place(header); }
+    }
+    ch.paras.forEach((para, paraIdx) => placePara({ type: 'para', chapterIdx, paraIdx, para }, header));
+  });
+  flush();
+  if (!pages.length) pages.push({ blocks: [], chapterIdx: 0, startPara: 0 });
 
   GLOBAL_PAGES = pages;
 }
@@ -1654,21 +1706,34 @@ function currentPageAnchor() {
   return { chapterIdx: page.chapterIdx, paraIdx: page.startPara };
 }
 
-/* The page showing paragraph `paraIdx` of the chapter: the page that starts exactly on
-   it if there is one, otherwise the last page starting before it. Works across screen
-   and text-size changes, because paragraphs don't move — only page breaks do. */
+/* The page where paragraph `paraIdx` of the chapter begins (or, if the chapter is
+   shorter, its last page). Works across screen and text-size changes, because
+   paragraphs don't move — only page breaks do. */
 function findPageIndexForAnchor(anchor) {
   if (!anchor || !GLOBAL_PAGES.length) return 0;
-  const chapterStart = GLOBAL_PAGES.findIndex(pg => pg.chapterIdx === anchor.chapterIdx);
-  if (chapterStart === -1) return 0;
   const paraIdx = anchor.paraIdx || 0;
-  let best = chapterStart;
-  for (let i = chapterStart; i < GLOBAL_PAGES.length && GLOBAL_PAGES[i].chapterIdx === anchor.chapterIdx; i++) {
-    if (GLOBAL_PAGES[i].startPara > paraIdx) break;
-    if (GLOBAL_PAGES[i].startPara === paraIdx) return i;
-    best = i;
+  let best = -1;
+  for (let i = 0; i < GLOBAL_PAGES.length; i++) {
+    for (const b of GLOBAL_PAGES[i].blocks) {
+      if (b.chapterIdx !== anchor.chapterIdx) continue;
+      if (b.type === 'header') { if (best === -1) best = i; continue; }
+      if (b.paraIdx === paraIdx && !b.cont) return i;
+      if (b.paraIdx <= paraIdx) best = i;
+    }
   }
-  return best;
+  return best === -1 ? 0 : best;
+}
+
+// First page where a chapter appears (its heading, or its first paragraph if it has none).
+function chapterStartPageIndex(chapterIdx) {
+  const i = GLOBAL_PAGES.findIndex(pg => pg.blocks.some(b => b.chapterIdx === chapterIdx));
+  return i === -1 ? 0 : i;
+}
+
+// The chapter a page "belongs to" for the Contents list: the last chapter that starts on it.
+function pageDisplayChapter(page) {
+  const headers = page.blocks.filter(b => b.type === 'header');
+  return headers.length ? headers[headers.length - 1].chapterIdx : page.chapterIdx;
 }
 
 function repaginateKeepingPlace() {
@@ -1685,8 +1750,7 @@ function renderCurrentPage() {
   const content = document.getElementById('pageContent');
   content.className = 'page-content' + (currentBook.rtl ? ' rtl' : '') + (currentBook.devanagari ? ' devanagari' : '') + (currentBook.gurmukhi ? ' gurmukhi' : '');
   content.style.fontSize = fontSize + 'px';
-  content.innerHTML = chapterHeaderHtml(page.label, page.title)
-    + page.paras.map(p => `<p${p.cls ? ` class="${p.cls}"` : ''}>${p.html}</p>`).join('');
+  content.innerHTML = page.blocks.map(blockHtml).join('');
   document.getElementById('pageIndicator').textContent = `Page ${currentPageIdx + 1} of ${GLOBAL_PAGES.length}`;
   const pct = GLOBAL_PAGES.length > 1 ? (currentPageIdx / (GLOBAL_PAGES.length - 1)) * 100 : 100;
   document.getElementById('progressFill').style.width = pct + '%';
@@ -1745,11 +1809,11 @@ function renderContentsList() {
     // label/title are already sanitized (see openBook)
     const name = ch.label || ch.title || `Chapter ${i + 1}`;
     const sub = ch.label && ch.title ? `<small>${ch.title}</small>` : '';
-    return `<button class="contents-item${i === currentChapterIdx ? ' current' : ''}" data-chapter="${i}" dir="auto">${name}${sub}</button>`;
+    return `<button class="contents-item${i === pageDisplayChapter(GLOBAL_PAGES[currentPageIdx]) ? ' current' : ''}" data-chapter="${i}" dir="auto">${name}${sub}</button>`;
   }).join('');
   list.querySelectorAll('.contents-item').forEach(btn => {
     btn.addEventListener('click', () => {
-      const idx = GLOBAL_PAGES.findIndex(pg => pg.chapterIdx === Number(btn.dataset.chapter));
+      const idx = chapterStartPageIndex(Number(btn.dataset.chapter));
       contentsPanel.classList.remove('open');
       if (idx !== -1) { currentPageIdx = idx; renderCurrentPage(); }
     });
