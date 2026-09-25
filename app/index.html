@@ -223,7 +223,7 @@
 
   /* ---------- Login / sign-in view ---------- */
   .login-view {
-    height: 100vh;
+    min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -301,6 +301,57 @@
     min-height: 16px;
   }
   .login-note strong { color: var(--gold-bright); }
+
+  /* ---------- "Install the app" guidance ---------- */
+  .install-card {
+    margin-top: 26px; padding: 14px; border-radius: 10px; text-align: left;
+    border: 1px solid rgba(240,194,94,0.35); background: rgba(240,194,94,0.07);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .install-card-text { flex: 1; min-width: 0; font-size: 12px; line-height: 1.45; color: var(--text-on-ink-dim); }
+  .install-card-text strong { display: block; font-size: 13px; color: var(--text-on-ink); margin-bottom: 2px; }
+  .install-card-btn {
+    flex-shrink: 0; background: linear-gradient(180deg, var(--gold-bright), var(--gold)); color: #1B140A;
+    border: none; border-radius: 6px; padding: 9px 12px; font-family: var(--sans); font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .install-sheet-overlay {
+    position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.55);
+    display: none; align-items: flex-end; justify-content: center;
+  }
+  .install-sheet-overlay.open { display: flex; }
+  .install-sheet {
+    position: relative; width: 100%; max-width: 440px; max-height: 88vh; overflow-y: auto;
+    background: var(--ink-soft); color: var(--text-on-ink); border-radius: 16px 16px 0 0;
+    padding: 26px 22px calc(24px + env(safe-area-inset-bottom, 0px)); text-align: center;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.35);
+  }
+  @media (min-width: 600px) {
+    .install-sheet-overlay { align-items: center; }
+    .install-sheet { border-radius: 16px; }
+  }
+  .install-sheet-close {
+    position: absolute; top: 10px; right: 12px; width: 34px; height: 34px; border-radius: 50%;
+    background: none; border: none; color: var(--text-on-ink-dim); font-size: 24px; line-height: 1; cursor: pointer;
+  }
+  .install-sheet-icon { width: 64px; height: 64px; border-radius: 14px; margin-bottom: 10px; }
+  .install-sheet h2 { font-family: var(--serif); font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  .install-sheet-sub { font-size: 13px; color: var(--text-on-ink-dim); line-height: 1.5; margin-bottom: 18px; }
+  .install-steps { list-style: none; text-align: left; margin: 0 0 6px; padding: 0; }
+  .install-steps li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; font-size: 14px; line-height: 1.5; }
+  .install-steps li + li { border-top: 1px solid rgba(233,226,208,0.08); }
+  .install-step-num {
+    flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold)); color: #1B140A; font-weight: 700; font-size: 13px;
+  }
+  .install-steps b { color: var(--gold-bright); font-weight: 600; }
+  .install-glyph { display: inline-flex; vertical-align: -3px; margin: 0 2px; color: var(--gold-bright); }
+  .install-now-btn {
+    width: 100%; margin: 4px 0 10px; padding: 13px; border: none; border-radius: 8px; cursor: pointer;
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold)); color: #1B140A;
+    font-family: var(--sans); font-size: 15px; font-weight: 700;
+  }
+  .install-sheet-after { font-size: 12px; color: var(--text-on-ink-dim); line-height: 1.5; margin-top: 12px; }
+  body.light-app .install-steps li + li { border-top-color: rgba(36,30,20,0.08); }
 
   /* ---------- Locked book overlay ---------- */
   .book-cover { position: relative; }
@@ -911,6 +962,27 @@
       </div>
 
       <div class="login-note" id="loginNote"></div>
+
+      <!-- Shown until the app is installed on this device — see "Install the app" below -->
+      <div class="install-card" id="installCardLogin" style="display:none;">
+        <div class="install-card-text">
+          <strong id="installCardTitle">Install the app on your phone</strong>
+          <span id="installCardSub">Open King's Library from your home screen, like any other app. Free — no app store needed.</span>
+        </div>
+        <button class="install-card-btn" id="installCardBtn">Show me how</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- "Install the app" instructions for this device -->
+  <div class="install-sheet-overlay" id="installSheet" aria-hidden="true">
+    <div class="install-sheet" role="dialog" aria-modal="true" aria-labelledby="installSheetTitle">
+      <button class="install-sheet-close" id="installSheetClose" aria-label="Close">×</button>
+      <img class="install-sheet-icon" src="../shared/icons/icon-192.png" alt="">
+      <h2 id="installSheetTitle">Install King's Library</h2>
+      <p class="install-sheet-sub" id="installSheetSub"></p>
+      <div id="installSheetBody"></div>
+      <p class="install-sheet-after" id="installSheetAfter"></p>
     </div>
   </div>
 
@@ -928,6 +1000,9 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input type="text" placeholder="Search your library" id="searchInput">
         </div>
+        <button id="installAppBtn" class="theme-toggle-btn" title="Install the app" aria-label="Install the app" style="display:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M5 21h14"/></svg>
+        </button>
         <button id="uiLangBtn" class="theme-toggle-btn uiLangBtn" title="Interface language">EN</button>
         <button id="appThemeToggle" class="theme-toggle-btn" title="Switch light/dark mode">
           <svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
@@ -2361,6 +2436,31 @@ const UI_STRINGS = {
     backToLibrary: "Library",
     textSize: "Text size",
     contents: "Contents",
+    installCardTitle: "Install the app on your phone",
+    installCardSub: "Open King's Library from your home screen, like any other app. Free — no app store needed.",
+    installShowHow: "Show me how",
+    installNow: "Install app",
+    installTitle: "Install King's Library",
+    installSub: "Add the app to your home screen. It opens full-screen like any other app — free, no app store needed.",
+    installAfter: "Once installed, open King's Library from your home screen and sign in with the email you used to buy.",
+    installBtnTitle: "Install the app",
+    installAndroidSteps: [
+      "Opened this from an email or WhatsApp? Tap {menu} at the top right and choose <b>Open in Chrome</b>.",
+      "In Chrome, tap {menu} at the top right.",
+      "Tap <b>Install app</b> (or <b>Add to Home screen</b>), then <b>Install</b>.",
+    ],
+    installPromptOr: "Or: tap {menu} at the top right → <b>Install app</b>.",
+    installIosSteps: [
+      "Opened this from an email or WhatsApp? First tap {safari} or <b>Open in Safari</b>.",
+      "Tap the Share button {share} at the bottom of the screen (top right on iPad).",
+      "Scroll down, tap <b>Add to Home Screen</b> {plus}, then tap <b>Add</b>.",
+    ],
+    installDesktopSteps: [
+      "Use <b>Chrome</b> or <b>Microsoft Edge</b>.",
+      "Click the install icon {install} at the right end of the address bar — or open the menu {menu} → <b>Install King's Library</b>.",
+      "On your phone it's even easier: open the link from your email there and follow the steps shown.",
+    ],
+    installedToast: "Installed! Open King's Library from your home screen.",
     theme: "Theme",
     nowPlaying: "Now Playing",
     privacyShieldText: "This book is only viewable inside King's Library. Content is hidden while the window is out of focus.",
@@ -2389,6 +2489,31 @@ const UI_STRINGS = {
     backToLibrary: "लाइब्रेरी",
     textSize: "टेक्स्ट आकार",
     contents: "विषय-सूची",
+    installCardTitle: "ऐप को अपने फ़ोन पर इंस्टॉल करें",
+    installCardSub: "किसी भी दूसरे ऐप की तरह, King's Library को अपनी होम स्क्रीन से खोलें। मुफ़्त — ऐप स्टोर की ज़रूरत नहीं।",
+    installShowHow: "कैसे करें, दिखाएं",
+    installNow: "ऐप इंस्टॉल करें",
+    installTitle: "King's Library इंस्टॉल करें",
+    installSub: "ऐप को अपनी होम स्क्रीन पर जोड़ें। यह किसी भी दूसरे ऐप की तरह पूरी स्क्रीन में खुलता है — मुफ़्त, ऐप स्टोर की ज़रूरत नहीं।",
+    installAfter: "इंस्टॉल होने के बाद, King's Library को होम स्क्रीन से खोलें और उसी ईमेल से साइन इन करें जिससे आपने खरीदा था।",
+    installBtnTitle: "ऐप इंस्टॉल करें",
+    installAndroidSteps: [
+      "क्या आपने इसे ईमेल या WhatsApp से खोला है? ऊपर दाईं ओर {menu} दबाएं और <b>Open in Chrome</b> चुनें।",
+      "Chrome में, ऊपर दाईं ओर {menu} दबाएं।",
+      "<b>Install app</b> (या <b>Add to Home screen</b>) दबाएं, फिर <b>Install</b>।",
+    ],
+    installPromptOr: "या: ऊपर दाईं ओर {menu} दबाएं → <b>Install app</b>।",
+    installIosSteps: [
+      "क्या आपने इसे ईमेल या WhatsApp से खोला है? पहले {safari} या <b>Open in Safari</b> दबाएं।",
+      "स्क्रीन के नीचे Share बटन {share} दबाएं (iPad पर ऊपर दाईं ओर)।",
+      "नीचे स्क्रॉल करें, <b>Add to Home Screen</b> {plus} दबाएं, फिर <b>Add</b> दबाएं।",
+    ],
+    installDesktopSteps: [
+      "<b>Chrome</b> या <b>Microsoft Edge</b> का इस्तेमाल करें।",
+      "एड्रेस बार के दाएं सिरे पर इंस्टॉल आइकन {install} पर क्लिक करें — या मेनू {menu} → <b>Install King's Library</b> खोलें।",
+      "फ़ोन पर और भी आसान है: अपने ईमेल का लिंक फ़ोन पर खोलें और वहां दिखाए गए स्टेप्स अपनाएं।",
+    ],
+    installedToast: "इंस्टॉल हो गया! King's Library को अपनी होम स्क्रीन से खोलें।",
     theme: "थीम",
     nowPlaying: "अभी चल रहा है",
     privacyShieldText: "यह किताब केवल किंग्स लाइब्रेरी के अंदर देखी जा सकती है। विंडो फोकस से बाहर होने पर सामग्री छिप जाती है।",
@@ -2417,6 +2542,31 @@ const UI_STRINGS = {
     backToLibrary: "ਲਾਇਬ੍ਰੇਰੀ",
     textSize: "ਟੈਕਸਟ ਆਕਾਰ",
     contents: "ਤਤਕਰਾ",
+    installCardTitle: "ਐਪ ਨੂੰ ਆਪਣੇ ਫ਼ੋਨ 'ਤੇ ਇੰਸਟਾਲ ਕਰੋ",
+    installCardSub: "ਕਿਸੇ ਵੀ ਹੋਰ ਐਪ ਵਾਂਗ, King's Library ਨੂੰ ਆਪਣੀ ਹੋਮ ਸਕ੍ਰੀਨ ਤੋਂ ਖੋਲ੍ਹੋ। ਮੁਫ਼ਤ — ਐਪ ਸਟੋਰ ਦੀ ਲੋੜ ਨਹੀਂ।",
+    installShowHow: "ਕਿਵੇਂ ਕਰਨਾ ਹੈ, ਵਿਖਾਓ",
+    installNow: "ਐਪ ਇੰਸਟਾਲ ਕਰੋ",
+    installTitle: "King's Library ਇੰਸਟਾਲ ਕਰੋ",
+    installSub: "ਐਪ ਨੂੰ ਆਪਣੀ ਹੋਮ ਸਕ੍ਰੀਨ 'ਤੇ ਜੋੜੋ। ਇਹ ਕਿਸੇ ਵੀ ਹੋਰ ਐਪ ਵਾਂਗ ਪੂਰੀ ਸਕ੍ਰੀਨ ਵਿੱਚ ਖੁੱਲ੍ਹਦਾ ਹੈ — ਮੁਫ਼ਤ, ਐਪ ਸਟੋਰ ਦੀ ਲੋੜ ਨਹੀਂ।",
+    installAfter: "ਇੰਸਟਾਲ ਹੋਣ ਤੋਂ ਬਾਅਦ, King's Library ਨੂੰ ਹੋਮ ਸਕ੍ਰੀਨ ਤੋਂ ਖੋਲ੍ਹੋ ਅਤੇ ਉਸੇ ਈਮੇਲ ਨਾਲ ਸਾਈਨ ਇਨ ਕਰੋ ਜਿਸ ਨਾਲ ਤੁਸੀਂ ਖਰੀਦਿਆ ਸੀ।",
+    installBtnTitle: "ਐਪ ਇੰਸਟਾਲ ਕਰੋ",
+    installAndroidSteps: [
+      "ਕੀ ਤੁਸੀਂ ਇਸਨੂੰ ਈਮੇਲ ਜਾਂ WhatsApp ਤੋਂ ਖੋਲ੍ਹਿਆ ਹੈ? ਉੱਪਰ ਸੱਜੇ ਪਾਸੇ {menu} ਦਬਾਓ ਅਤੇ <b>Open in Chrome</b> ਚੁਣੋ।",
+      "Chrome ਵਿੱਚ, ਉੱਪਰ ਸੱਜੇ ਪਾਸੇ {menu} ਦਬਾਓ।",
+      "<b>Install app</b> (ਜਾਂ <b>Add to Home screen</b>) ਦਬਾਓ, ਫਿਰ <b>Install</b>।",
+    ],
+    installPromptOr: "ਜਾਂ: ਉੱਪਰ ਸੱਜੇ ਪਾਸੇ {menu} ਦਬਾਓ → <b>Install app</b>।",
+    installIosSteps: [
+      "ਕੀ ਤੁਸੀਂ ਇਸਨੂੰ ਈਮੇਲ ਜਾਂ WhatsApp ਤੋਂ ਖੋਲ੍ਹਿਆ ਹੈ? ਪਹਿਲਾਂ {safari} ਜਾਂ <b>Open in Safari</b> ਦਬਾਓ।",
+      "ਸਕ੍ਰੀਨ ਦੇ ਹੇਠਾਂ Share ਬਟਨ {share} ਦਬਾਓ (iPad 'ਤੇ ਉੱਪਰ ਸੱਜੇ ਪਾਸੇ)।",
+      "ਹੇਠਾਂ ਸਕ੍ਰੋਲ ਕਰੋ, <b>Add to Home Screen</b> {plus} ਦਬਾਓ, ਫਿਰ <b>Add</b> ਦਬਾਓ।",
+    ],
+    installDesktopSteps: [
+      "<b>Chrome</b> ਜਾਂ <b>Microsoft Edge</b> ਵਰਤੋ।",
+      "ਐਡਰੈੱਸ ਬਾਰ ਦੇ ਸੱਜੇ ਸਿਰੇ 'ਤੇ ਇੰਸਟਾਲ ਆਈਕਨ {install} 'ਤੇ ਕਲਿੱਕ ਕਰੋ — ਜਾਂ ਮੀਨੂ {menu} → <b>Install King's Library</b> ਖੋਲ੍ਹੋ।",
+      "ਫ਼ੋਨ 'ਤੇ ਹੋਰ ਵੀ ਆਸਾਨ ਹੈ: ਆਪਣੀ ਈਮੇਲ ਦਾ ਲਿੰਕ ਫ਼ੋਨ 'ਤੇ ਖੋਲ੍ਹੋ ਅਤੇ ਉੱਥੇ ਦਿਖਾਏ ਗਏ ਕਦਮ ਅਪਣਾਓ।",
+    ],
+    installedToast: "ਇੰਸਟਾਲ ਹੋ ਗਿਆ! King's Library ਨੂੰ ਆਪਣੀ ਹੋਮ ਸਕ੍ਰੀਨ ਤੋਂ ਖੋਲ੍ਹੋ।",
     theme: "ਥੀਮ",
     nowPlaying: "ਹੁਣ ਚੱਲ ਰਿਹਾ ਹੈ",
     privacyShieldText: "ਇਹ ਕਿਤਾਬ ਸਿਰਫ਼ ਕਿੰਗਜ਼ ਲਾਇਬ੍ਰੇਰੀ ਦੇ ਅੰਦਰ ਹੀ ਦੇਖੀ ਜਾ ਸਕਦੀ ਹੈ। ਵਿੰਡੋ ਫੋਕਸ ਤੋਂ ਬਾਹਰ ਹੋਣ 'ਤੇ ਸਮੱਗਰੀ ਲੁਕ ਜਾਂਦੀ ਹੈ।",
@@ -2464,6 +2614,7 @@ function applyTranslations() {
   document.querySelectorAll('.backLibraryLabel').forEach(el => el.textContent = s.backToLibrary);
   setText('textSizeLabel', s.textSize);
   setText('contentsLabel', s.contents);
+  renderInstallUi();
   document.getElementById('contentsBtn').title = s.contents;
   setText('themeLabel', s.theme);
   setText('podcastNowPlayingLabel', s.nowPlaying);
@@ -2484,6 +2635,108 @@ document.getElementById('uiLangBtnLogin').addEventListener('click', cycleUiLang)
 
 /* ============ Init ============ */
 checkSession();
+
+/* ============ "Install the app" guidance ============
+   King's Library installs from the browser (no app store). Android Chrome and desktop
+   Chrome/Edge can offer a one-tap install (the beforeinstallprompt event); iPhones and
+   links opened inside Gmail/WhatsApp can't, so those get step-by-step instructions.
+   Everything hides once the app is running installed. */
+let deferredInstallPrompt = null;
+
+const INSTALL_GLYPHS = {
+  menu: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>',
+  share: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>',
+  plus: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>',
+  safari: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>',
+  install: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 7v6m0 0-2.5-2.5M12 13l2.5-2.5M8 21h8"/></svg>',
+};
+
+function appIsInstalled() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function installPlatform() {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  return 'desktop';
+}
+
+function installStepsHtml(steps) {
+  const fill = (s) => s.replace(/\{(\w+)\}/g, (_, k) => INSTALL_GLYPHS[k] ? `<span class="install-glyph">${INSTALL_GLYPHS[k]}</span>` : '');
+  return `<ol class="install-steps">${steps.map((s, i) => `<li><span class="install-step-num">${i + 1}</span><span>${fill(s)}</span></li>`).join('')}</ol>`;
+}
+
+function renderInstallUi() {
+  const installed = appIsInstalled();
+  document.getElementById('installCardLogin').style.display = installed ? 'none' : '';
+  document.getElementById('installAppBtn').style.display = installed ? 'none' : '';
+  document.getElementById('installCardTitle').textContent = t('installCardTitle');
+  document.getElementById('installCardSub').textContent = t('installCardSub');
+  document.getElementById('installCardBtn').textContent = deferredInstallPrompt ? t('installNow') : t('installShowHow');
+  const btn = document.getElementById('installAppBtn');
+  btn.title = t('installBtnTitle');
+  btn.setAttribute('aria-label', t('installBtnTitle'));
+}
+
+function openInstallSheet() {
+  const platform = installPlatform();
+  document.getElementById('installSheetTitle').textContent = t('installTitle');
+  document.getElementById('installSheetSub').textContent = t('installSub');
+  document.getElementById('installSheetAfter').textContent = t('installAfter');
+  const fill = (s) => installStepsHtml([s]).replace(/<\/?ol[^>]*>|<li>|<\/li>|<span class="install-step-num">1<\/span>/g, '');
+  let body = '';
+  if (deferredInstallPrompt) {
+    // The browser can install in one tap — offer that first, with the manual route as a fallback.
+    body = `<button class="install-now-btn" id="installNowBtn">${t('installNow')}</button>
+            <p class="install-sheet-sub">${fill(t('installPromptOr'))}</p>`;
+  } else if (platform === 'ios') {
+    body = installStepsHtml(t('installIosSteps'));
+  } else if (platform === 'android') {
+    body = installStepsHtml(t('installAndroidSteps'));
+  } else {
+    body = installStepsHtml(t('installDesktopSteps'));
+  }
+  document.getElementById('installSheetBody').innerHTML = body;
+  document.getElementById('installNowBtn')?.addEventListener('click', promptInstall);
+  const sheet = document.getElementById('installSheet');
+  sheet.classList.add('open');
+  sheet.setAttribute('aria-hidden', 'false');
+}
+
+function closeInstallSheet() {
+  const sheet = document.getElementById('installSheet');
+  sheet.classList.remove('open');
+  sheet.setAttribute('aria-hidden', 'true');
+}
+
+async function promptInstall() {
+  if (!deferredInstallPrompt) { openInstallSheet(); return; }
+  const promptEvent = deferredInstallPrompt;
+  deferredInstallPrompt = null; // the browser only allows each prompt to be shown once
+  promptEvent.prompt();
+  await promptEvent.userChoice.catch(() => null);
+  closeInstallSheet();
+  renderInstallUi();
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); // keep it for our own "Install app" button instead of the browser's mini-bar
+  deferredInstallPrompt = e;
+  renderInstallUi();
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  closeInstallSheet();
+  renderInstallUi();
+  showToast(t('installedToast'));
+});
+document.getElementById('installCardBtn').addEventListener('click', () => (deferredInstallPrompt ? promptInstall() : openInstallSheet()));
+document.getElementById('installAppBtn').addEventListener('click', openInstallSheet);
+document.getElementById('installSheetClose').addEventListener('click', closeInstallSheet);
+document.getElementById('installSheet').addEventListener('click', (e) => { if (e.target.id === 'installSheet') closeInstallSheet(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInstallSheet(); });
+renderInstallUi();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
