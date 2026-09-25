@@ -84,10 +84,13 @@
 
   const s = () => STRINGS[opts.getLang()] || STRINGS.en;
   const escape = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // Plain text with clickable links, emails and wa.me numbers — nothing else is rendered as HTML.
+  // Plain text with clickable links and emails, plus **bold** — nothing else is rendered as HTML.
   const linkify = (t) => escape(t)
     .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
-    .replace(/(^|[\s(])([\w.+-]+@[\w-]+\.[\w.]+[\w])/g, '$1<a href="mailto:$2">$2</a>');
+    .replace(/(^|[\s(])([\w.+-]+@[\w-]+\.[\w.]+[\w])/g, '$1<a href="mailto:$2">$2</a>')
+    // The model sometimes uses **bold** or # headings despite instructions — show them tidily.
+    .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+    .replace(/^#{1,4}\s+/gm, '');
 
   function load() {
     try { history = JSON.parse(sessionStorage.getItem(STORE_KEY) || '[]').filter((m) => m && (m.role === 'user' || m.role === 'assistant')); }
