@@ -14,7 +14,8 @@
       busy: 'The help chat is very busy right now. Please try again in a little while, or contact us directly.',
       error: "Sorry, I couldn't answer just now. Please try again, or contact us directly on the Contact Us page.",
       disclaimer: 'Answers are automatic and can make mistakes — for payments or your order, contact us.',
-      suggestions: ["I didn't get my sign-in code", 'How do I install the app?', 'What is your refund policy?'],
+      newChat: 'New chat',
+      suggestions: ["I didn't get my sign-in code", 'How do I install the app?', 'What is your refund policy?', 'How do I buy a book?', 'Which books and podcasts are available?', 'How long does delivery take?'],
     },
     hi: {
       button: 'मदद', title: 'King\'s Library सहायता', sub: 'ऐप, खरीदारी, डिलीवरी या रिफंड के बारे में पूछें',
@@ -24,7 +25,8 @@
       busy: 'सहायता चैट अभी बहुत व्यस्त है। कृपया थोड़ी देर बाद कोशिश करें, या सीधे हमसे संपर्क करें।',
       error: 'माफ़ कीजिए, अभी जवाब नहीं दे सका। कृपया फिर कोशिश करें, या "संपर्क करें" पेज से सीधे हमसे संपर्क करें।',
       disclaimer: 'जवाब अपने-आप बनते हैं और गलत हो सकते हैं — भुगतान या ऑर्डर के लिए हमसे संपर्क करें।',
-      suggestions: ['मुझे साइन-इन कोड नहीं मिला', 'ऐप कैसे इंस्टॉल करें?', 'रिफंड नीति क्या है?'],
+      newChat: 'नई चैट',
+      suggestions: ['मुझे साइन-इन कोड नहीं मिला', 'ऐप कैसे इंस्टॉल करें?', 'रिफंड नीति क्या है?', 'किताब कैसे खरीदें?', 'कौन-सी किताबें और पॉडकास्ट उपलब्ध हैं?', 'डिलीवरी में कितना समय लगता है?'],
     },
     pa: {
       button: 'ਮਦਦ', title: "King's Library ਸਹਾਇਤਾ", sub: 'ਐਪ, ਖਰੀਦ, ਡਿਲੀਵਰੀ ਜਾਂ ਰਿਫੰਡ ਬਾਰੇ ਪੁੱਛੋ',
@@ -34,7 +36,8 @@
       busy: 'ਸਹਾਇਤਾ ਚੈਟ ਇਸ ਵੇਲੇ ਬਹੁਤ ਰੁੱਝੀ ਹੋਈ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਥੋੜ੍ਹੀ ਦੇਰ ਬਾਅਦ ਕੋਸ਼ਿਸ਼ ਕਰੋ, ਜਾਂ ਸਿੱਧਾ ਸਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੋ।',
       error: 'ਮਾਫ਼ ਕਰਨਾ, ਹੁਣੇ ਜਵਾਬ ਨਹੀਂ ਦੇ ਸਕਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ, ਜਾਂ "ਸੰਪਰਕ ਕਰੋ" ਪੰਨੇ ਤੋਂ ਸਿੱਧਾ ਸਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੋ।',
       disclaimer: 'ਜਵਾਬ ਆਪਣੇ-ਆਪ ਬਣਦੇ ਹਨ ਅਤੇ ਗਲਤ ਹੋ ਸਕਦੇ ਹਨ — ਭੁਗਤਾਨ ਜਾਂ ਆਰਡਰ ਲਈ ਸਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੋ।',
-      suggestions: ['ਮੈਨੂੰ ਸਾਈਨ-ਇਨ ਕੋਡ ਨਹੀਂ ਮਿਲਿਆ', 'ਐਪ ਕਿਵੇਂ ਇੰਸਟਾਲ ਕਰੀਏ?', 'ਰਿਫੰਡ ਨੀਤੀ ਕੀ ਹੈ?'],
+      newChat: 'ਨਵੀਂ ਚੈਟ',
+      suggestions: ['ਮੈਨੂੰ ਸਾਈਨ-ਇਨ ਕੋਡ ਨਹੀਂ ਮਿਲਿਆ', 'ਐਪ ਕਿਵੇਂ ਇੰਸਟਾਲ ਕਰੀਏ?', 'ਰਿਫੰਡ ਨੀਤੀ ਕੀ ਹੈ?', 'ਕਿਤਾਬ ਕਿਵੇਂ ਖਰੀਦੀਏ?', 'ਕਿਹੜੀਆਂ ਕਿਤਾਬਾਂ ਅਤੇ ਪੌਡਕਾਸਟ ਉਪਲਬਧ ਹਨ?', 'ਡਿਲੀਵਰੀ ਵਿੱਚ ਕਿੰਨਾ ਸਮਾਂ ਲੱਗਦਾ ਹੈ?'],
     },
   };
   const STORE_KEY = 'kl-chat-history';
@@ -52,6 +55,8 @@
   .klc-head-text { flex: 1; min-width: 0; }
   .klc-title { font: 600 16px/1.3 'Literata', Georgia, serif; }
   .klc-sub { font-size: 11.5px; color: #93A0A8; margin-top: 2px; }
+  .klc-new { flex-shrink: 0; background: none; border: 1px solid rgba(240,194,94,0.4); color: #F0C25E; border-radius: 14px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; align-self: center; }
   .klc-close { background: none; border: none; color: #93A0A8; font-size: 24px; line-height: 1; cursor: pointer; padding: 0 4px; }
   .klc-log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
   .klc-msg { max-width: 86%; padding: 9px 12px; border-radius: 12px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -107,10 +112,19 @@
     els.input.placeholder = str.placeholder;
     els.send.textContent = str.send;
     els.note.textContent = str.disclaimer;
+    els.newChat.textContent = '↺ ' + str.newChat;
+    els.newChat.style.display = history.length ? '' : 'none';
+    const chips = (list) => `<div class="klc-chips">${list.map((q) => `<button class="klc-chip" type="button">${escape(q)}</button>`).join('')}</div>`;
     let html = `<div class="klc-msg klc-bot">${escape(str.greeting)}</div>`;
-    if (!history.length) html += `<div class="klc-chips">${str.suggestions.map((q) => `<button class="klc-chip" type="button">${escape(q)}</button>`).join('')}</div>`;
+    if (!history.length) html += chips(str.suggestions.slice(0, 3));
     html += history.map((m) => `<div class="klc-msg ${m.role === 'user' ? 'klc-user' : 'klc-bot'}">${linkify(m.content)}</div>`).join('');
     if (sending) html += `<div class="klc-msg klc-bot klc-typing">${escape(str.thinking)}</div>`;
+    else if (history.length) {
+      // After each answer, offer the suggested questions not asked yet.
+      const asked = new Set(history.filter((m) => m.role === 'user').map((m) => m.content));
+      const more = str.suggestions.filter((q) => !asked.has(q)).slice(0, 3);
+      if (more.length) html += chips(more);
+    }
     els.log.innerHTML = html;
     els.log.querySelectorAll('.klc-chip').forEach((c) => c.addEventListener('click', () => ask(c.textContent)));
     els.log.scrollTop = els.log.scrollHeight;
@@ -147,6 +161,14 @@
     render();
   }
 
+  function newChat() {
+    if (sending) return;
+    history = [];
+    save();
+    render();
+    els.input.focus();
+  }
+
   function setOpen(open) {
     els.panel.classList.toggle('open', open);
     els.btn.style.display = open ? 'none' : '';
@@ -176,6 +198,7 @@
       <div class="klc-panel" role="dialog" aria-modal="false">
         <div class="klc-head">
           <div class="klc-head-text"><div class="klc-title"></div><div class="klc-sub"></div></div>
+          <button class="klc-new" type="button"></button>
           <button class="klc-close" type="button">×</button>
         </div>
         <div class="klc-log" aria-live="polite"></div>
@@ -189,11 +212,12 @@
     els = {
       btn: wrap.querySelector('.klc-btn'), btnLabel: wrap.querySelector('.klc-btn-label'),
       panel: wrap.querySelector('.klc-panel'), title: wrap.querySelector('.klc-title'), sub: wrap.querySelector('.klc-sub'),
-      close: wrap.querySelector('.klc-close'), log: wrap.querySelector('.klc-log'), form: wrap.querySelector('.klc-form'),
+      close: wrap.querySelector('.klc-close'), newChat: wrap.querySelector('.klc-new'), log: wrap.querySelector('.klc-log'), form: wrap.querySelector('.klc-form'),
       input: wrap.querySelector('.klc-input'), send: wrap.querySelector('.klc-send'), note: wrap.querySelector('.klc-note'),
     };
     els.btn.addEventListener('click', () => setOpen(true));
     els.close.addEventListener('click', () => setOpen(false));
+    els.newChat.addEventListener('click', newChat);
     els.form.addEventListener('submit', (e) => { e.preventDefault(); const q = els.input.value; els.input.value = ''; ask(q); });
     els.input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); els.form.requestSubmit ? els.form.requestSubmit() : els.form.dispatchEvent(new Event('submit')); }
