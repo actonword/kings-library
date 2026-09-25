@@ -39,6 +39,21 @@ _original-mockups/   the original static demo files, kept for reference
   role) ever creates. A stranger who self-registers gets an authenticated session with
   zero rows visible anywhere.
 
+## Help chatbot
+
+A "Help" chat button on the website and in the app (`shared/chat-widget.js`) sends
+questions to the `support-chat` Edge Function, which answers with **Claude Haiku 4.5**
+(chosen for cost) from the live settings (contact details, Refund/Delivery policies),
+the published catalog, and a fixed app guide in the function; for signed-in readers it
+also knows what they own. It hands off to email/WhatsApp for anything account-specific.
+- Limits: 20 replies per reader (or per IP for visitors) per day, and 500 site-wide per
+  day, counted in `chat_usage` (migration 0013). Override with the `CHAT_DAILY_LIMIT` /
+  `CHAT_SITE_DAILY_LIMIT` function secrets.
+- Setup: `ANTHROPIC_API_KEY` function secret (Supabase dashboard → Edge Functions →
+  Secrets), `db push`, `functions deploy support-chat`. The button stays hidden until
+  the function reports it is ready (GET returns `{ ready }`).
+- When online payments go live, update `HOW_TO_BUY` in the function.
+
 ## One-time Supabase setup
 
 1. **Create a project** at supabase.com (free tier is fine).

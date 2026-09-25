@@ -15,6 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;0,7..72,600;0,7..72,700;1,7..72,400&family=Inter:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&family=Noto+Sans+Gurmukhi:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/supabaseClient.js"></script>
+<script src="../shared/chat-widget.js"></script>
 <style>
   :root {
     --ink: #0A121C;
@@ -2615,6 +2616,7 @@ function applyTranslations() {
   setText('textSizeLabel', s.textSize);
   setText('contentsLabel', s.contents);
   renderInstallUi();
+  if (window.KLChat) KLChat.refresh();
   document.getElementById('contentsBtn').title = s.contents;
   setText('themeLabel', s.theme);
   setText('podcastNowPlayingLabel', s.nowPlaying);
@@ -2737,6 +2739,14 @@ document.getElementById('installSheetClose').addEventListener('click', closeInst
 document.getElementById('installSheet').addEventListener('click', (e) => { if (e.target.id === 'installSheet') closeInstallSheet(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInstallSheet(); });
 renderInstallUi();
+
+// Help chat (shared/chat-widget.js) — hidden while a book or podcast is open, so it never
+// covers the page or the player.
+if (window.KLChat) KLChat.init({
+  getLang: () => currentUiLang,
+  isHidden: () => document.getElementById('readerView').classList.contains('active')
+    || document.getElementById('podcastView').classList.contains('active'),
+});
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

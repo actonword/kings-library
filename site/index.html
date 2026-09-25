@@ -28,6 +28,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;0,7..72,600;0,7..72,700;1,7..72,400&family=Inter:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&family=Noto+Sans+Gurmukhi:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/supabaseClient.js"></script>
+<script src="../shared/chat-widget.js"></script>
 <style>
   :root {
     --ink: #0A121C;
@@ -1434,6 +1435,7 @@ function applyTranslations() {
   renderGrid();
   renderPodcastGrid();
   applySiteCustomizations();
+  if (window.KLChat) KLChat.refresh();
 }
 
 function cycleUiLang() {
@@ -1523,6 +1525,13 @@ function openSectionFromHash() {
 }
 openSectionFromHash();
 window.addEventListener('hashchange', openSectionFromHash);
+
+// Help chat (shared/chat-widget.js): sits above the WhatsApp button, hidden while reading a sample.
+if (window.KLChat) KLChat.init({
+  getLang: () => currentUiLang,
+  isHidden: () => document.body.dataset.section === 'reader',
+  bottomOffset: window.matchMedia('(max-width: 480px)').matches ? 74 : 84,
+});
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
