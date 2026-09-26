@@ -16,6 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/supabaseClient.js"></script>
 <script src="../shared/chat-widget.js"></script>
+<script src="../shared/refer.js"></script>
 <style>
   :root {
     --ink: #0A121C;
@@ -624,6 +625,15 @@
     border-radius: var(--radius);
   }
   .ctrl-btn:hover { background: rgba(36,30,20,0.06); color: var(--text-on-parch); }
+  .podcast-refer-btn { width: 60px; color: var(--text-on-ink-dim); }
+  .podcast-refer-btn:hover { background: none; color: var(--gold-bright); }
+  /* Small "Refer a friend" icon on library cards (see shared/refer.js) */
+  .card-refer-btn {
+    display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+    width: 24px; height: 24px; margin-left: 6px; border-radius: 50%; cursor: pointer;
+    background: none; border: 1px solid rgba(240,194,94,0.35); color: var(--gold-bright);
+  }
+  .card-refer-btn:hover { background: rgba(240,194,94,0.12); }
 
   .page-stage {
     flex: 1;
@@ -1090,6 +1100,9 @@
       </button>
       <div class="reader-title-mini" id="readerTitleMini"></div>
       <div class="reader-controls">
+        <button class="ctrl-btn" id="referBookBtn" title="Refer a friend" aria-label="Refer a friend">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9"/></svg>
+        </button>
         <button class="ctrl-btn" id="contentsBtn" title="Contents">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
         </button>
@@ -1152,7 +1165,9 @@
         <span class="backLibraryLabel">Library</span>
       </button>
       <div class="reader-title-mini" id="podcastNowPlayingLabel">Now Playing</div>
-      <div style="width:60px"></div>
+      <button class="ctrl-btn podcast-refer-btn" id="referPodBtn" title="Refer a friend" aria-label="Refer a friend">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9"/></svg>
+      </button>
     </div>
 
     <div class="podcast-stage">
@@ -1379,6 +1394,7 @@ function bookCardHTML(book) {
         <div class="book-name">${book.title}</div>
         <div class="book-author">${book.author}</div>
         <span class="book-lang-tag">${book.lang}</span>
+        <button class="card-refer-btn" data-refer-type="book" data-refer-id="${book.id}" title="${t('referTitle')}" aria-label="${t('referTitle')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9"/></svg></button>
       </div>
     </div>
   `;
@@ -2175,7 +2191,9 @@ function podcastCardHTML(pod) {
       <div class="podcast-meta">
         <div class="podcast-meta-name">${pod.title}</div>
         <div class="podcast-meta-host">${pod.host}</div>
-        <div class="podcast-duration">${pod.hasAudio ? formatTime(pod.duration) : 'No audio yet'} · ${pod.lang}</div>
+        <div class="podcast-duration">${pod.hasAudio ? formatTime(pod.duration) : 'No audio yet'} · ${pod.lang}
+          <button class="card-refer-btn" data-refer-type="podcast" data-refer-id="${pod.id}" title="${t('referTitle')}" aria-label="${t('referTitle')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9"/></svg></button>
+        </div>
       </div>
     </div>
   `;
@@ -2437,6 +2455,7 @@ const UI_STRINGS = {
     backToLibrary: "Library",
     textSize: "Text size",
     contents: "Contents",
+    referTitle: "Refer a friend",
     installCardTitle: "Install the app on your phone",
     installCardSub: "Open King's Library from your home screen, like any other app. Free — no app store needed.",
     installShowHow: "Show me how",
@@ -2490,6 +2509,7 @@ const UI_STRINGS = {
     backToLibrary: "लाइब्रेरी",
     textSize: "टेक्स्ट आकार",
     contents: "विषय-सूची",
+    referTitle: "दोस्त को रेफ़र करें",
     installCardTitle: "ऐप को अपने फ़ोन पर इंस्टॉल करें",
     installCardSub: "किसी भी दूसरे ऐप की तरह, King's Library को अपनी होम स्क्रीन से खोलें। मुफ़्त — ऐप स्टोर की ज़रूरत नहीं।",
     installShowHow: "कैसे करें, दिखाएं",
@@ -2543,6 +2563,7 @@ const UI_STRINGS = {
     backToLibrary: "ਲਾਇਬ੍ਰੇਰੀ",
     textSize: "ਟੈਕਸਟ ਆਕਾਰ",
     contents: "ਤਤਕਰਾ",
+    referTitle: "ਦੋਸਤ ਨੂੰ ਰੈਫ਼ਰ ਕਰੋ",
     installCardTitle: "ਐਪ ਨੂੰ ਆਪਣੇ ਫ਼ੋਨ 'ਤੇ ਇੰਸਟਾਲ ਕਰੋ",
     installCardSub: "ਕਿਸੇ ਵੀ ਹੋਰ ਐਪ ਵਾਂਗ, King's Library ਨੂੰ ਆਪਣੀ ਹੋਮ ਸਕ੍ਰੀਨ ਤੋਂ ਖੋਲ੍ਹੋ। ਮੁਫ਼ਤ — ਐਪ ਸਟੋਰ ਦੀ ਲੋੜ ਨਹੀਂ।",
     installShowHow: "ਕਿਵੇਂ ਕਰਨਾ ਹੈ, ਵਿਖਾਓ",
@@ -2615,6 +2636,7 @@ function applyTranslations() {
   document.querySelectorAll('.backLibraryLabel').forEach(el => el.textContent = s.backToLibrary);
   setText('textSizeLabel', s.textSize);
   setText('contentsLabel', s.contents);
+  ['referBookBtn', 'referPodBtn'].forEach(id => { const b = document.getElementById(id); b.title = s.referTitle; b.setAttribute('aria-label', s.referTitle); });
   renderInstallUi();
   if (window.KLChat) KLChat.refresh();
   document.getElementById('contentsBtn').title = s.contents;
@@ -2739,6 +2761,23 @@ document.getElementById('installSheetClose').addEventListener('click', closeInst
 document.getElementById('installSheet').addEventListener('click', (e) => { if (e.target.id === 'installSheet') closeInstallSheet(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInstallSheet(); });
 renderInstallUi();
+
+/* ---------- Refer a friend (shared/refer.js) ---------- */
+if (window.KLRefer) KLRefer.init({ getLang: () => currentUiLang });
+function referItem(type, id) {
+  const item = type === 'podcast' ? PODCASTS.find(p => p.id === id) : BOOKS.find(b => b.id === id);
+  if (item && window.KLRefer) KLRefer.open({ type, id: item.id, title: item.title, by: type === 'podcast' ? item.host : item.author });
+}
+// Capture phase, so the icon on a card refers the item instead of opening it.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.card-refer-btn');
+  if (!btn) return;
+  e.stopPropagation();
+  e.preventDefault();
+  referItem(btn.dataset.referType, btn.dataset.referId);
+}, true);
+document.getElementById('referBookBtn').addEventListener('click', () => { if (currentBook) referItem('book', currentBook.id); });
+document.getElementById('referPodBtn').addEventListener('click', () => { if (currentPodcast) referItem('podcast', currentPodcast.id); });
 
 // Help chat (shared/chat-widget.js) — hidden while a book or podcast is open, so it never
 // covers the page or the player.

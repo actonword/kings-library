@@ -29,6 +29,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/supabaseClient.js"></script>
 <script src="../shared/chat-widget.js"></script>
+<script src="../shared/refer.js"></script>
 <style>
   :root {
     --ink: #0A121C;
@@ -296,6 +297,10 @@
     font-size: 11px; cursor: pointer; font-family: var(--sans); display: flex; align-items: center; justify-content: center; gap: 5px;
   }
   .share-book-btn:hover { color: var(--gold-bright); }
+  /* A book/podcast opened from a referral link (#book=… / #podcast=…) */
+  .referred { border-radius: 10px; animation: referredGlow 1.2s ease 3; box-shadow: 0 0 0 2px var(--gold-bright); }
+  @keyframes referredGlow { 50% { box-shadow: 0 0 0 2px var(--gold-bright), 0 0 26px 4px rgba(240,194,94,0.45); } }
+  @media (prefers-reduced-motion: reduce) { .referred { animation: none; } }
 
   /* ---------- Preview reader ---------- */
   #readerSection { padding: 0; }
@@ -418,7 +423,8 @@
     .book-meta { font-size: 9.5px; }
     .book-name { font-size: 9.5px; }
     .book-author { font-size: 8.5px; margin-bottom: 3px; }
-    .book-desc, .share-book-btn { display: none; }
+    .book-desc { display: none; }
+    .share-book-btn { font-size: 9px; margin-top: 3px; gap: 3px; }
     .book-row-tags { margin-bottom: 4px; }
     .book-lang-tag { font-size: 7.5px; padding: 0px 5px; }
     .book-price { font-size: 9.5px; }
@@ -841,7 +847,7 @@ function bookCardHTML(book) {
     ? `background-image:url('${book.coverImage}');background-size:cover;background-position:center;`
     : `background:${book.coverColor}`;
   return `
-    <div class="book-card">
+    <div class="book-card" data-book-id="${book.id}">
       <div class="book-cover" style="${coverStyle}">
         <div class="book-title-on-cover">${book.title}</div>
       </div>
@@ -857,7 +863,7 @@ function bookCardHTML(book) {
           <button class="sample-btn" data-id="${book.id}">${tr('readSample')}</button>
           <button class="buy-btn" data-id="${book.id}" ${book.price ? '' : 'disabled'}>${tr('buyNow')}</button>
         </div>
-        <button class="share-book-btn" data-id="${book.id}" title="Share this book">
+        <button class="share-book-btn" data-id="${book.id}" title="${tr('referTitle')}">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9"/></svg> ${tr('share')}
         </button>
       </div>
@@ -980,7 +986,7 @@ document.getElementById('shareSiteBtn').addEventListener('click', () => {
 
 function shareBook(id) {
   const book = BOOKS.find(b => b.id === id);
-  shareContent(book.title, `Check out "${book.title}" by ${book.author} on King's Library.`);
+  if (book) KLRefer.open({ type: 'book', id: book.id, title: book.title, by: book.author });
 }
 
 /* ---------- Pinch-to-zoom on the sample reader ---------- */
@@ -1035,7 +1041,7 @@ function podcastCardHTML2(pod) {
     ? `background-image:url('${pod.coverImage}');background-size:cover;background-position:center;`
     : `background:${pod.coverColor}`;
   return `
-    <div class="podcast-card2">
+    <div class="podcast-card2" data-pod-id="${pod.id}">
       <div class="podcast-cover2" style="${coverStyle}"></div>
       <div class="podcast-name2">${pod.title}</div>
       <div class="podcast-host2">${pod.host}</div>
@@ -1043,6 +1049,9 @@ function podcastCardHTML2(pod) {
       <div class="podcast-row2"><span>${formatDur(pod.duration)} · ${pod.lang}</span><span class="podcast-price2">${pod.price ? '₹' + pod.price : 'Free'}</span></div>
       <button class="listen-btn" data-id="${pod.id}">${tr('listenToSample')}</button>
       <button class="buy-btn2" data-id="${pod.id}">${tr('buyNow')}</button>
+      <button class="share-book-btn refer-pod-btn" data-id="${pod.id}" title="${tr('referTitle')}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9"/></svg> ${tr('share')}
+      </button>
       <div class="mini-player" id="mini-${pod.id}">
         <div class="mini-player-row">
           <button class="mini-play-btn" data-id="${pod.id}">
@@ -1083,10 +1092,17 @@ function renderPodcastGrid() {
   document.getElementById('podcastGrid').innerHTML = filtered.length
     ? filtered.map(podcastCardHTML2).join('')
     : `<p style="color:var(--text-on-ink-dim);font-size:13px;">${tr('noPodcastsFound')}</p>`;
-  document.querySelectorAll('.listen-btn').forEach(btn => {
+  const grid = document.getElementById('podcastGrid'); // not the whole page — home-page podcast cards reuse .listen-btn
+  grid.querySelectorAll('.listen-btn').forEach(btn => {
     btn.addEventListener('click', () => toggleMiniPlayer(btn.dataset.id));
   });
-  document.querySelectorAll('.buy-btn2').forEach(btn => {
+  grid.querySelectorAll('.refer-pod-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pod = PODCASTS.find(p => p.id === btn.dataset.id);
+      if (pod) KLRefer.open({ type: 'podcast', id: pod.id, title: pod.title, by: pod.host });
+    });
+  });
+  grid.querySelectorAll('.buy-btn2').forEach(btn => {
     btn.addEventListener('click', () => {
       const pod = PODCASTS.find(p => p.id === btn.dataset.id);
       requestPurchase(pod.title, pod.price);
@@ -1201,7 +1217,9 @@ const UI_STRINGS = {
     listenToSample: "Listen to Sample",
     noPodcastsFound: "No podcasts found.",
     freePreviewEnded: "Free preview ended — Buy Now to hear the full episode.",
-    share: "Share",
+    share: "Refer",
+    referTitle: "Refer a friend",
+    referNotFound: "That title isn't available right now — have a look at the rest of the library.",
     legalBack: "Back",
     termsLabel: "Terms & Conditions",
     privacyLabel: "Privacy Policy",
@@ -1266,7 +1284,9 @@ const UI_STRINGS = {
     listenToSample: "नमूना सुनें",
     noPodcastsFound: "कोई पॉडकास्ट नहीं मिला।",
     freePreviewEnded: "मुफ़्त पूर्वावलोकन समाप्त हुआ — पूरा एपिसोड सुनने के लिए अभी खरीदें।",
-    share: "साझा करें",
+    share: "रेफ़र करें",
+    referTitle: "दोस्त को रेफ़र करें",
+    referNotFound: "यह शीर्षक अभी उपलब्ध नहीं है — लाइब्रेरी की बाकी किताबें देखें।",
     legalBack: "वापस",
     termsLabel: "नियम और शर्तें",
     privacyLabel: "गोपनीयता नीति",
@@ -1331,7 +1351,9 @@ const UI_STRINGS = {
     listenToSample: "ਨਮੂਨਾ ਸੁਣੋ",
     noPodcastsFound: "ਕੋਈ ਪੌਡਕਾਸਟ ਨਹੀਂ ਮਿਲਿਆ।",
     freePreviewEnded: "ਮੁਫ਼ਤ ਝਲਕ ਖਤਮ ਹੋਈ — ਪੂਰਾ ਐਪੀਸੋਡ ਸੁਣਨ ਲਈ ਹੁਣੇ ਖਰੀਦੋ।",
-    share: "ਸਾਂਝਾ ਕਰੋ",
+    share: "ਰੈਫ਼ਰ ਕਰੋ",
+    referTitle: "ਦੋਸਤ ਨੂੰ ਰੈਫ਼ਰ ਕਰੋ",
+    referNotFound: "ਇਹ ਸਿਰਲੇਖ ਇਸ ਵੇਲੇ ਉਪਲਬਧ ਨਹੀਂ ਹੈ — ਲਾਇਬ੍ਰੇਰੀ ਦੀਆਂ ਬਾਕੀ ਕਿਤਾਬਾਂ ਵੇਖੋ।",
     legalBack: "ਵਾਪਸ",
     termsLabel: "ਨਿਯਮ ਅਤੇ ਸ਼ਰਤਾਂ",
     privacyLabel: "ਪਰਦੇਦਾਰੀ ਨੀਤੀ",
@@ -1516,6 +1538,7 @@ async function init() {
   renderPodcastGrid();
   renderHomeShelf();
   applySiteCustomizations();
+  openItemFromHash();
 }
 init();
 
@@ -1524,7 +1547,25 @@ function openSectionFromHash() {
   if (LINKABLE_SECTIONS.includes(name)) showSection(name);
 }
 openSectionFromHash();
-window.addEventListener('hashchange', openSectionFromHash);
+window.addEventListener('hashchange', () => { if (!openItemFromHash()) openSectionFromHash(); });
+
+/* Referral links (shared/refer.js): #book=<id> or #podcast=<id> opens that item, highlighted,
+   with its free sample / preview and Buy button right there. */
+function openItemFromHash() {
+  const m = location.hash.match(/^#(book|podcast)=([\w-]+)$/);
+  if (!m) return false;
+  const [, type, id] = m;
+  showSection(type === 'book' ? 'browse' : 'podcasts');
+  const card = document.querySelector(type === 'book' ? `#bookGrid [data-book-id="${id}"]` : `#podcastGrid [data-pod-id="${id}"]`);
+  if (!card) { showToast(tr('referNotFound')); return true; }
+  document.querySelectorAll('.referred').forEach(el => el.classList.remove('referred'));
+  card.classList.add('referred');
+  setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
+  setTimeout(() => card.classList.remove('referred'), 6000);
+  return true;
+}
+
+if (window.KLRefer) KLRefer.init({ getLang: () => currentUiLang });
 
 // Help chat (shared/chat-widget.js): sits above the WhatsApp button, hidden while reading a sample.
 if (window.KLChat) KLChat.init({
