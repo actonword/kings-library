@@ -329,6 +329,10 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4.5 5-6 8-6s6.5 1.5 8 6"/></svg>
       Manage Users
     </button>
+    <button class="nav-item" data-view="contacts" onclick="showView('contacts')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2.5"/><path d="M5.5 16.5a4 4 0 0 1 7 0M14 9h4M14 13h4"/></svg>
+      Contacts
+    </button>
     <button class="nav-item" data-view="log" onclick="showView('log')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
       Access Log
@@ -609,6 +613,24 @@
       <div class="page-head"><h1>Access Log</h1><p>A record of everything done for readers: access granted (with the app-link email sent), access revoked, and notifications sent. Newest first.</p></div>
       <div class="panel-block">
         <div id="fullLog"></div>
+      </div>
+    </div>
+
+    <!-- CONTACTS -->
+    <div id="contactsView" class="view">
+      <div class="page-head"><h1>Contacts</h1><p>Name, email and phone of people who opened a referral link or tapped Buy Now on the website — each agreed to be contacted by email, phone or WhatsApp. <span id="leadsCount"></span></p></div>
+      <div class="panel-block">
+        <div class="review-tabs" style="align-items:center;">
+          <div class="form-field" style="flex:1;min-width:200px;max-width:360px;margin:0;"><input type="search" id="leadSearch" placeholder="Search name, email, phone or title…" oninput="renderLeads()"></div>
+          <div class="form-field" style="margin:0;"><select id="leadSourceFilter" onchange="renderLeads()">
+            <option value="all">All sources</option><option value="referral">Referral links</option><option value="buy">Buy Now</option>
+          </select></div>
+          <button class="btn btn-gold btn-tiny" onclick="downloadLeadsCsv()">Download (Excel)</button>
+        </div>
+        <table>
+          <thead><tr><th>Date</th><th>Name</th><th>Email</th><th>Phone</th><th>Came from</th><th>Interested in</th><th></th></tr></thead>
+          <tbody id="leadsTableBody"></tbody>
+        </table>
       </div>
     </div>
 
@@ -998,6 +1020,92 @@ async function saveSettings() {
   showToast('Settings saved — the website will use these right away.');
 }
 
+/* ---------- Contacts (leads from the website — migration 0015) ---------- */
+let LEADS = [];
+let LEADS_READY = true;
+
+async function loadLeads() {
+  const { data, error } = await sb.from('leads').select('*').order('created_at', { ascending: false });
+  LEADS_READY = !error;
+  LEADS = data || [];
+}
+
+function leadItemTitle(l) {
+  if (!l.item_id) return '';
+  const item = (l.item_type === 'podcast' ? PODCASTS : BOOKS).find(x => x.id === l.item_id);
+  return (l.item_type === 'podcast' ? '🎙️ ' : '') + (item ? item.title : '(removed)');
+}
+function leadSource(l) {
+  if (l.source === 'buy') return 'Buy Now';
+  const referrer = l.referred_by ? READERS.find(r => r.id === l.referred_by)?.email : null;
+  return referrer ? `Referral from ${referrer}` : 'Referral link';
+}
+function waNumber(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length === 10 ? '91' + digits : digits; // assume India for 10-digit numbers
+}
+
+function filteredLeads() {
+  const q = (document.getElementById('leadSearch').value || '').trim().toLowerCase();
+  const src = document.getElementById('leadSourceFilter').value;
+  return LEADS.filter(l => (src === 'all' || l.source === src)
+    && (!q || [l.name, l.email, l.phone, leadItemTitle(l), leadSource(l)].some(v => String(v).toLowerCase().includes(q))));
+}
+
+function renderLeads() {
+  const body = document.getElementById('leadsTableBody');
+  document.getElementById('leadsCount').textContent = LEADS.length ? `${LEADS.length} contact${LEADS.length === 1 ? '' : 's'} collected` : '';
+  if (!LEADS_READY) {
+    body.innerHTML = '<tr><td colspan="7" class="review-meta">Contacts aren’t switched on yet — run the database update (npx supabase db push).</td></tr>';
+    return;
+  }
+  const shown = filteredLeads();
+  if (!shown.length) {
+    body.innerHTML = `<tr><td colspan="7" class="review-meta">${LEADS.length ? 'No contacts match your search.' : 'No contacts yet. They appear here when someone opens a referral link or taps Buy Now on the website.'}</td></tr>`;
+    return;
+  }
+  body.innerHTML = shown.map(l => `
+    <tr>
+      <td style="white-space:nowrap;">${fmtTime(l.created_at)}</td>
+      <td><div class="t-main">${escapeHtml(l.name)}</div></td>
+      <td><a href="mailto:${escapeHtml(l.email)}" style="color:var(--gold-bright);">${escapeHtml(l.email)}</a></td>
+      <td style="white-space:nowrap;">
+        <a href="tel:${escapeHtml(l.phone.replace(/\s+/g, ''))}" style="color:var(--gold-bright);">${escapeHtml(l.phone)}</a>
+        <a href="https://wa.me/${waNumber(l.phone)}" target="_blank" rel="noopener" title="Open in WhatsApp" style="margin-left:6px;color:#25D366;">WhatsApp</a>
+      </td>
+      <td>${escapeHtml(leadSource(l))}</td>
+      <td>${escapeHtml(leadItemTitle(l))}</td>
+      <td><button class="btn btn-danger-outline btn-tiny" onclick="deleteLead('${l.id}')" title="Delete this contact (e.g. if they ask to be removed)">Delete</button></td>
+    </tr>`).join('');
+}
+
+async function deleteLead(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!confirm(`Delete the contact ${l?.name} (${l?.email})? Do this if they ask to be removed. This can’t be undone.`)) return;
+  const { error } = await sb.from('leads').delete().eq('id', id);
+  if (error) { showToast('Could not delete: ' + error.message); return; }
+  await loadLeads();
+  renderLeads();
+  showToast('Contact deleted.');
+}
+
+// Download as a CSV file — opens in Excel / Google Sheets (with a BOM so Hindi/Punjabi names show correctly).
+function downloadLeadsCsv() {
+  const rows = filteredLeads();
+  if (!rows.length) { showToast('No contacts to download.'); return; }
+  const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const header = ['Date', 'Name', 'Email', 'Phone', 'Came from', 'Interested in'];
+  const lines = rows.map(l => [new Date(l.created_at).toLocaleString('en-IN'), l.name, l.email, l.phone, leadSource(l), leadItemTitle(l).replace('🎙️ ', 'Podcast: ')].map(cell).join(','));
+  const blob = new Blob(['﻿' + [header.map(cell).join(','), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `kings-library-contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 /* ---------- Ratings & reviews (migration 0014) ---------- */
 let RATINGS = [];
 let RATINGS_READY = true;
@@ -1077,6 +1185,7 @@ async function loadEverything() {
   await loadReaders();
   await loadLog();
   await loadRatings();
+  await loadLeads();
   await loadNotifications();
   await loadUiLanguages();
   await loadSettings();
@@ -1092,6 +1201,7 @@ async function loadEverything() {
   renderNotifBookOptions();
   renderNotifSentLog();
   renderReviews();
+  renderLeads();
   renderUiLangTable();
   renderUiLangRequested();
   renderSettings();

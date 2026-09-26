@@ -62,12 +62,16 @@
   .klr-opt-whatsapp .klr-icon { background: #25D366; color: #fff; }
   .klr-toast { margin-top: 14px; font-size: 12.5px; color: #F0C25E; min-height: 18px; }`;
 
-  let opts = { getLang: () => 'en' };
+  let opts = { getLang: () => 'en', getReferrerId: null };
   let els = null;
 
   const s = () => STRINGS[opts.getLang()] || STRINGS.en;
   const escape = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const linkFor = (item) => `${SITE}#${item.type === 'podcast' ? 'podcast' : 'book'}=${encodeURIComponent(item.id)}`;
+  // &ref=<reader id> (app only) lets the admin see which reader brought each new contact.
+  const linkFor = (item) => {
+    const ref = opts.getReferrerId ? opts.getReferrerId() : null;
+    return `${SITE}#${item.type === 'podcast' ? 'podcast' : 'book'}=${encodeURIComponent(item.id)}${ref ? `&ref=${encodeURIComponent(ref)}` : ''}`;
+  };
 
   function build() {
     const style = document.createElement('style');

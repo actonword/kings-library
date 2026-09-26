@@ -2782,7 +2782,7 @@ if (window.KLRatings) KLRatings.init({
 });
 
 /* ---------- Refer a friend (shared/refer.js) ---------- */
-if (window.KLRefer) KLRefer.init({ getLang: () => currentUiLang });
+if (window.KLRefer) KLRefer.init({ getLang: () => currentUiLang, getReferrerId: () => currentReader?.id || null });
 function referItem(type, id) {
   const item = type === 'podcast' ? PODCASTS.find(p => p.id === id) : BOOKS.find(b => b.id === id);
   if (item && window.KLRefer) KLRefer.open({ type, id: item.id, title: item.title, by: type === 'podcast' ? item.host : item.author });

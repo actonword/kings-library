@@ -31,6 +31,7 @@
 <script src="../shared/chat-widget.js"></script>
 <script src="../shared/refer.js"></script>
 <script src="../shared/ratings.js"></script>
+<script src="../shared/lead-form.js"></script>
 <style>
   :root {
     --ink: #0A121C;
@@ -938,17 +939,22 @@ function openSample(id) {
 
 function buyBook(id) {
   const book = BOOKS.find(b => b.id === id);
-  requestPurchase(book.title, book.price);
+  if (book) requestPurchase({ type: 'book', id: book.id, title: book.title, price: book.price });
 }
-
-function requestPurchase(title, price) {
+// Buy Now: collect the buyer's name, email and phone first (saved to the admin's Contacts),
+// then open their email app with a purchase request that already includes those details.
+async function requestPurchase(item) {
   if (!CONTACT_EMAIL) {
     showToast("Purchasing isn't set up yet — check back soon.");
     return;
   }
-  const priceLabel = price ? `₹${price}` : tr('priceTBA');
-  const subject = encodeURIComponent(`King's Library — purchase request: ${title}`);
-  const body = encodeURIComponent(`Hi,\n\nI'd like to buy "${title}" (${priceLabel}) from King's Library.\n\nMy email for access: \n`);
+  const contact = window.KLLead
+    ? await KLLead.ask({ source: 'buy', itemType: item.type, itemId: item.id, itemTitle: item.title, compulsory: false })
+    : { name: '', email: '', phone: '' };
+  if (!contact) return; // cancelled
+  const priceLabel = item.price ? `₹${item.price}` : tr('priceTBA');
+  const subject = encodeURIComponent(`King's Library — purchase request: ${item.title}`);
+  const body = encodeURIComponent(`Hi,\n\nI'd like to buy "${item.title}" (${priceLabel}) from King's Library.\n\nName: ${contact.name}\nEmail for access: ${contact.email}\nPhone / WhatsApp: ${contact.phone}\n`);
   showToast(`${tr('buyEmailInstruction')} ${CONTACT_EMAIL}`);
   window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
 }
@@ -1108,7 +1114,7 @@ function renderPodcastGrid() {
   grid.querySelectorAll('.buy-btn2').forEach(btn => {
     btn.addEventListener('click', () => {
       const pod = PODCASTS.find(p => p.id === btn.dataset.id);
-      requestPurchase(pod.title, pod.price);
+      if (pod) requestPurchase({ type: 'podcast', id: pod.id, title: pod.title, price: pod.price });
     });
   });
   document.querySelectorAll('.mini-play-btn').forEach(btn => {
@@ -1557,20 +1563,31 @@ window.addEventListener('hashchange', () => { if (!openItemFromHash()) openSecti
 /* Referral links (shared/refer.js): #book=<id> or #podcast=<id> opens that item, highlighted,
    with its free sample / preview and Buy button right there. */
 function openItemFromHash() {
-  const m = location.hash.match(/^#(book|podcast)=([\w-]+)$/);
+  // #book=<id> or #podcast=<id>, optionally &ref=<id of the reader who shared it>
+  const m = location.hash.match(/^#(book|podcast)=([\w-]+)(?:&ref=([\w-]+))?$/);
   if (!m) return false;
-  const [, type, id] = m;
+  const [, type, id, ref] = m;
   showSection(type === 'book' ? 'browse' : 'podcasts');
+  const item = (type === 'book' ? BOOKS : PODCASTS).find(x => x.id === id);
   const card = document.querySelector(type === 'book' ? `#bookGrid [data-book-id="${id}"]` : `#podcastGrid [data-pod-id="${id}"]`);
-  if (!card) { showToast(tr('referNotFound')); return true; }
-  document.querySelectorAll('.referred').forEach(el => el.classList.remove('referred'));
-  card.classList.add('referred');
-  setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
-  setTimeout(() => card.classList.remove('referred'), 6000);
+  if (!item || !card) { showToast(tr('referNotFound')); return true; }
+  const highlight = () => {
+    document.querySelectorAll('.referred').forEach(el => el.classList.remove('referred'));
+    card.classList.add('referred');
+    setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
+    setTimeout(() => card.classList.remove('referred'), 6000);
+  };
+  // The friend fills in the contact form first (compulsory), then sees the item.
+  if (window.KLLead) {
+    KLLead.ask({ source: 'referral', itemType: type, itemId: id, itemTitle: item.title, referredBy: ref || null, compulsory: true }).then(highlight);
+  } else {
+    highlight();
+  }
   return true;
 }
 
 if (window.KLRefer) KLRefer.init({ getLang: () => currentUiLang });
+if (window.KLLead) KLLead.init({ getLang: () => currentUiLang });
 if (window.KLRatings) KLRatings.init({
   getLang: () => currentUiLang,
   findItem: (type, id) => (type === 'podcast' ? PODCASTS : BOOKS).find(x => x.id === id),
