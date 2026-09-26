@@ -17,6 +17,7 @@
 <script src="../shared/supabaseClient.js"></script>
 <script src="../shared/chat-widget.js"></script>
 <script src="../shared/refer.js"></script>
+<script src="../shared/ratings.js"></script>
 <style>
   :root {
     --ink: #0A121C;
@@ -634,6 +635,7 @@
     background: none; border: 1px solid rgba(240,194,94,0.35); color: var(--gold-bright);
   }
   .card-refer-btn:hover { background: rgba(240,194,94,0.12); }
+  .card-ratings { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-top: 4px; }
 
   .page-stage {
     flex: 1;
@@ -1364,10 +1366,18 @@ async function loadNotifications() {
   }));
 }
 
+// Star average (tap for reviews) and, for items the reader owns, a Rate button (shared/ratings.js).
+function cardRatingsHTML(type, item) {
+  if (!window.KLRatings) return '';
+  const html = KLRatings.badgeHTML(type, item.id) + (item.owned ? KLRatings.rateButtonHTML(type, item.id) : '');
+  return html ? `<div class="card-ratings">${html}</div>` : '';
+}
+
 async function loadEverything() {
   await loadBooks();
   await loadPodcasts();
   await loadNotifications();
+  if (window.KLRatings) await Promise.all([KLRatings.load(), KLRatings.loadMine(currentReader.id)]);
   populateLangDropdown();
   renderLibrary();
   renderPodcastShelf();
@@ -1395,6 +1405,7 @@ function bookCardHTML(book) {
         <div class="book-author">${book.author}</div>
         <span class="book-lang-tag">${book.lang}</span>
         <button class="card-refer-btn" data-refer-type="book" data-refer-id="${book.id}" title="${t('referTitle')}" aria-label="${t('referTitle')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9"/></svg></button>
+        ${cardRatingsHTML('book', book)}
       </div>
     </div>
   `;
@@ -2194,6 +2205,7 @@ function podcastCardHTML(pod) {
         <div class="podcast-duration">${pod.hasAudio ? formatTime(pod.duration) : 'No audio yet'} · ${pod.lang}
           <button class="card-refer-btn" data-refer-type="podcast" data-refer-id="${pod.id}" title="${t('referTitle')}" aria-label="${t('referTitle')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-3.9M8.6 13.5l6.8 3.9"/></svg></button>
         </div>
+        ${cardRatingsHTML('podcast', pod)}
       </div>
     </div>
   `;
@@ -2761,6 +2773,13 @@ document.getElementById('installSheetClose').addEventListener('click', closeInst
 document.getElementById('installSheet').addEventListener('click', (e) => { if (e.target.id === 'installSheet') closeInstallSheet(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInstallSheet(); });
 renderInstallUi();
+
+/* ---------- Ratings & reviews (shared/ratings.js) ---------- */
+if (window.KLRatings) KLRatings.init({
+  getLang: () => currentUiLang,
+  findItem: (type, id) => (type === 'podcast' ? PODCASTS : BOOKS).find(x => x.id === id),
+  onChange: () => { renderLibrary(); renderPodcastShelf(); },
+});
 
 /* ---------- Refer a friend (shared/refer.js) ---------- */
 if (window.KLRefer) KLRefer.init({ getLang: () => currentUiLang });

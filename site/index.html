@@ -30,6 +30,7 @@
 <script src="../shared/supabaseClient.js"></script>
 <script src="../shared/chat-widget.js"></script>
 <script src="../shared/refer.js"></script>
+<script src="../shared/ratings.js"></script>
 <style>
   :root {
     --ink: #0A121C;
@@ -854,6 +855,7 @@ function bookCardHTML(book) {
       <div class="book-meta">
         <div class="book-name">${book.title}</div>
         <div class="book-author">${book.author}</div>
+        ${window.KLRatings ? KLRatings.badgeHTML('book', book.id) : ''}
         ${book.description ? `<div class="book-desc">${book.description}</div>` : ''}
         <div class="book-row-tags">
           <span class="book-lang-tag">${book.lang}</span>
@@ -1045,6 +1047,7 @@ function podcastCardHTML2(pod) {
       <div class="podcast-cover2" style="${coverStyle}"></div>
       <div class="podcast-name2">${pod.title}</div>
       <div class="podcast-host2">${pod.host}</div>
+      ${window.KLRatings ? KLRatings.badgeHTML('podcast', pod.id) : ''}
       ${pod.description ? `<div class="podcast-desc2">${pod.description}</div>` : ''}
       <div class="podcast-row2"><span>${formatDur(pod.duration)} · ${pod.lang}</span><span class="podcast-price2">${pod.price ? '₹' + pod.price : 'Free'}</span></div>
       <button class="listen-btn" data-id="${pod.id}">${tr('listenToSample')}</button>
@@ -1497,6 +1500,7 @@ function renderHomeShelf() {
         <div class="podcast-cover2" style="${coverStyle}"></div>
         <div class="podcast-name2">${pod.title}</div>
         <div class="podcast-host2">${pod.host}</div>
+        ${window.KLRatings ? KLRatings.badgeHTML('podcast', pod.id) : ''}
         <div class="podcast-row2"><span>${formatDur(pod.duration)} · ${pod.lang}</span><span class="podcast-price2">${pod.price ? '₹' + pod.price : 'Free'}</span></div>
         <button class="listen-btn">${tr('listenToSample')}</button>
       </div>`;
@@ -1531,6 +1535,7 @@ async function init() {
   await loadSettings();
   await loadBooks();
   await loadPodcasts();
+  if (window.KLRatings) await KLRatings.load(); // star averages shown on the cards
   renderLangPills();
   populateLangSelect();
   renderGrid();
@@ -1566,6 +1571,10 @@ function openItemFromHash() {
 }
 
 if (window.KLRefer) KLRefer.init({ getLang: () => currentUiLang });
+if (window.KLRatings) KLRatings.init({
+  getLang: () => currentUiLang,
+  findItem: (type, id) => (type === 'podcast' ? PODCASTS : BOOKS).find(x => x.id === id),
+});
 
 // Help chat (shared/chat-widget.js): sits above the WhatsApp button, hidden while reading a sample.
 if (window.KLChat) KLChat.init({

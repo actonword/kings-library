@@ -163,6 +163,19 @@
   .chapter-preview p.pf-tight { margin-bottom: 0; }
   .chapter-preview b { font-weight: 700; }
   .serial-no { color: var(--text-on-ink-dim); font-variant-numeric: tabular-nums; }
+  .nav-count { margin-left: auto; min-width: 18px; padding: 1px 6px; border-radius: 10px; background: var(--gold-bright); color: #1B140A; font-size: 11px; font-weight: 700; text-align: center; }
+  .review-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .review-item { padding: 14px 0; border-top: 1px solid rgba(233,226,208,0.07); }
+  .review-item:first-child { border-top: none; }
+  .review-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; font-size: 13px; margin-bottom: 6px; }
+  .review-stars { color: var(--gold-bright); letter-spacing: 1px; }
+  .review-meta { font-size: 11.5px; color: var(--text-on-ink-dim); }
+  .review-text { font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 8px; }
+  .review-status { font-size: 10.5px; font-weight: 600; border-radius: 20px; padding: 1px 8px; border: 1px solid; }
+  .review-status.pending { color: var(--gold-bright); border-color: rgba(240,194,94,0.45); }
+  .review-status.approved { color: var(--green); border-color: rgba(92,158,107,0.45); }
+  .review-status.rejected { color: var(--red); border-color: rgba(196,87,74,0.45); }
+  .review-actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .badge-draft { font-size: 10px; font-weight: 600; color: var(--gold-bright); border: 1px solid rgba(240,194,94,0.45); border-radius: 20px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; white-space: nowrap; }
   .owned-item { display: inline-flex; align-items: center; gap: 4px; margin: 0 4px 4px 0; }
   .owned-progress { color: var(--text-on-ink-dim); }
@@ -323,6 +336,10 @@
     <button class="nav-item" data-view="notify" onclick="showView('notify')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       Notifications
+    </button>
+    <button class="nav-item" data-view="reviews" onclick="showView('reviews')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>
+      Reviews <span class="nav-count" id="reviewsNavCount" style="display:none;"></span>
     </button>
     <button class="nav-item" data-view="uilang" onclick="showView('uilang')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>
@@ -592,6 +609,18 @@
       <div class="page-head"><h1>Access Log</h1><p>A record of everything done for readers: access granted (with the app-link email sent), access revoked, and notifications sent. Newest first.</p></div>
       <div class="panel-block">
         <div id="fullLog"></div>
+      </div>
+    </div>
+
+    <!-- REVIEWS -->
+    <div id="reviewsView" class="view">
+      <div class="page-head"><h1>Ratings &amp; Reviews</h1><p>Only readers who own a book or podcast can rate it. Stars count straight away; a written review appears on the website only after you approve it here.</p></div>
+      <div class="panel-block">
+        <div class="review-tabs">
+          <button class="btn btn-gold btn-tiny" id="reviewTabPending" onclick="setReviewTab('pending')">Waiting for approval</button>
+          <button class="btn btn-outline btn-tiny" id="reviewTabAll" onclick="setReviewTab('all')">All ratings</button>
+        </div>
+        <div id="reviewsList"></div>
       </div>
     </div>
 
@@ -969,11 +998,85 @@ async function saveSettings() {
   showToast('Settings saved — the website will use these right away.');
 }
 
+/* ---------- Ratings & reviews (migration 0014) ---------- */
+let RATINGS = [];
+let RATINGS_READY = true;
+let reviewTab = 'pending';
+
+async function loadRatings() {
+  const { data, error } = await sb.from('ratings').select('*').order('updated_at', { ascending: false });
+  RATINGS_READY = !error;
+  RATINGS = data || [];
+}
+
+function setReviewTab(tab) {
+  reviewTab = tab;
+  document.getElementById('reviewTabPending').className = 'btn btn-tiny ' + (tab === 'pending' ? 'btn-gold' : 'btn-outline');
+  document.getElementById('reviewTabAll').className = 'btn btn-tiny ' + (tab === 'all' ? 'btn-gold' : 'btn-outline');
+  renderReviews();
+}
+
+function renderReviews() {
+  const pending = RATINGS.filter(r => r.review_status === 'pending');
+  const badge = document.getElementById('reviewsNavCount');
+  badge.textContent = pending.length;
+  badge.style.display = pending.length ? '' : 'none';
+  document.getElementById('reviewTabPending').textContent = `Waiting for approval (${pending.length})`;
+  document.getElementById('reviewTabAll').textContent = `All ratings (${RATINGS.length})`;
+  const list = document.getElementById('reviewsList');
+  if (!RATINGS_READY) {
+    list.innerHTML = '<p class="review-meta">Ratings aren’t switched on yet — run the database update (npx supabase db push).</p>';
+    return;
+  }
+  const shown = reviewTab === 'pending' ? pending : RATINGS;
+  if (!shown.length) {
+    list.innerHTML = `<p class="review-meta">${reviewTab === 'pending' ? 'No reviews waiting — you’re all caught up.' : 'No ratings yet.'}</p>`;
+    return;
+  }
+  const titleOf = (r) => (r.item_type === 'podcast' ? PODCASTS : BOOKS).find(x => x.id === r.item_id)?.title || '(removed)';
+  const emailOf = (id) => READERS.find(x => x.id === id)?.email || 'unknown reader';
+  const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+  const statusLabel = { pending: 'Waiting', approved: 'Approved — on website', rejected: 'Rejected' };
+  list.innerHTML = shown.map(r => `
+    <div class="review-item">
+      <div class="review-head">
+        <strong>${r.item_type === 'podcast' ? '🎙️ ' : ''}${escapeHtml(titleOf(r))}</strong>
+        <span class="review-stars">${stars(r.stars)}</span>
+        ${r.review_status !== 'none' ? `<span class="review-status ${r.review_status}">${statusLabel[r.review_status]}</span>` : ''}
+      </div>
+      ${r.review ? `<div class="review-text">${escapeHtml(r.review)}</div>` : '<div class="review-meta" style="margin-bottom:8px;">Stars only — no written review.</div>'}
+      <div class="review-meta" style="margin-bottom:8px;">By ${escapeHtml(emailOf(r.reader_id))} · shown as “${escapeHtml(r.reviewer_name || 'A reader')}” · ${fmtTime(r.updated_at)}</div>
+      <div class="review-actions">
+        ${r.review && r.review_status !== 'approved' ? `<button class="btn btn-gold btn-tiny" onclick="setReviewStatus('${r.id}', 'approved')">Approve</button>` : ''}
+        ${r.review && r.review_status !== 'rejected' ? `<button class="btn btn-outline btn-tiny" onclick="setReviewStatus('${r.id}', 'rejected')">${r.review_status === 'approved' ? 'Remove from website' : 'Reject'}</button>` : ''}
+        <button class="btn btn-danger-outline btn-tiny" onclick="deleteRating('${r.id}')">Delete rating</button>
+      </div>
+    </div>`).join('');
+}
+
+async function setReviewStatus(id, status) {
+  const { error } = await sb.from('ratings').update({ review_status: status }).eq('id', id);
+  if (error) { showToast('Could not update review: ' + error.message); return; }
+  await loadRatings();
+  renderReviews();
+  showToast(status === 'approved' ? 'Approved — the review now shows on the website.' : 'The review is hidden from the website. The stars still count.');
+}
+
+async function deleteRating(id) {
+  if (!confirm('Delete this rating completely (stars and review)? This can’t be undone.')) return;
+  const { error } = await sb.from('ratings').delete().eq('id', id);
+  if (error) { showToast('Could not delete: ' + error.message); return; }
+  await loadRatings();
+  renderReviews();
+  showToast('Rating deleted.');
+}
+
 async function loadEverything() {
   await loadBooks();
   await loadPodcasts();
   await loadReaders();
   await loadLog();
+  await loadRatings();
   await loadNotifications();
   await loadUiLanguages();
   await loadSettings();
@@ -988,6 +1091,7 @@ async function loadEverything() {
   renderDashboard();
   renderNotifBookOptions();
   renderNotifSentLog();
+  renderReviews();
   renderUiLangTable();
   renderUiLangRequested();
   renderSettings();
