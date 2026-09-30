@@ -701,6 +701,12 @@
   .page-content p.pf-split-head { margin-bottom: 0; }
   .page-content p.pf-split-head:not(.pf-left):not(.pf-center):not(.pf-right) { text-align-last: justify; }
   .page-content p.pf-split-tail { text-indent: 0; }
+  /* From the admin editor: a sub-heading inside a section, and a section title that
+     wasn't split into its own chapter (it still starts a new page — see paginateBook). */
+  .page-content p.pf-heading { font-weight: 700; font-size: 1.12em; text-align: left; text-indent: 0; margin-top: 0.4em; }
+  .page-content p.pf-section { font-family: var(--serif); font-weight: 700; font-size: 1.4em; line-height: 1.3; text-align: center; text-align-last: center; text-indent: 0; margin-bottom: 18px; }
+  .page-content p.pf-heading.pf-center { text-align: center; text-align-last: center; }
+  .page-content p.pf-heading.pf-right { text-align: right; }
   /* The book's Contents page (see contentsEntries): one tappable line per chapter */
   .page-content p.pf-toc {
     text-align: left; text-indent: 0; margin-bottom: 0; padding: 9px 2px;
@@ -1602,7 +1608,8 @@ function measurerFits(el) {
    wrapped as <p class="center inset …"> for alignment/indents. Anything else is shown
    as plain text, so stored content can never inject markup into the reader. */
 const INLINE_TAGS = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', SUP: 'sup', SUB: 'sub' };
-const PARA_CLASSES = new Set(['center', 'right', 'left', 'justify', 'indent', 'inset', 'tight']);
+const PARA_CLASSES = new Set(['center', 'right', 'left', 'justify', 'indent', 'inset', 'tight', 'heading', 'section']);
+const PAGEBREAK_MARKER = '[[pagebreak]]';
 
 function escapeText(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1786,11 +1793,18 @@ function paginateBook() {
     // Contents lines are never split (they carry their own markup); they just move on.
     const splittable = block.para.jumpTo == null;
     const split = splittable && blocks.length ? splitParagraphToFit(el, block.para, 2) : null;
-    if (split) {
+    const last = blocks[blocks.length - 1];
+    const strandedHeading = last && blocks.length > 1 && last.type === 'para' && /\bpf-heading\b/.test(last.para.cls);
+    if (split && !strandedHeading) {
       // Fill the rest of this page with the paragraph's opening lines.
       place({ ...block, para: split[0] });
       flush();
       block = { ...block, para: split[1], cont: true };
+    } else if (strandedHeading) {
+      // Don't leave a sub-heading alone at the foot of a page — take it along with its text.
+      blocks.pop();
+      flush();
+      place(last);
     } else {
       flush();
     }
@@ -1808,6 +1822,10 @@ function paginateBook() {
     flush(); // every chapter (and front-matter section) starts on a new page
     if (ch.label || ch.title) place({ type: 'header', chapterIdx, label: ch.label, title: ch.title });
     ch.paras.forEach((para, paraIdx) => {
+      // [[pagebreak]] (admin editor's "Page break") and a section title inside the text
+      // both start a new page; the page break itself shows nothing.
+      if (para.html === PAGEBREAK_MARKER) { flush(); return; }
+      if (/\bpf-section\b/.test(para.cls) && blocks.length) flush();
       if (para.html === CONTENTS_MARKER) {
         // The book's chapter list: one tappable line per later section/chapter.
         contentsEntries(chapterIdx).forEach((entry, n) =>

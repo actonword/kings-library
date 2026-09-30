@@ -39,6 +39,22 @@ _original-mockups/   the original static demo files, kept for reference
   role) ever creates. A stranger who self-registers gets an authenticated session with
   zero rows visible anywhere.
 
+## Book editor & sections
+
+- Admin uses `admin/rich-editor.js` (contenteditable) for the Add Book text and each
+  section in Content: bold/italic/underline, Sub-heading, Section title, alignment,
+  first-line indent, indented block, verse lines, line break, page break, clear format.
+  Pasting from Word/Google Docs is converted to the stored format.
+- Stored extras: `<p class="heading">` (sub-heading), `<p class="section">` (the admin
+  splits sections there on save), and the `[[pagebreak]]` / `[[contents]]` markers. The
+  reader starts a new page for every section, every `[[pagebreak]]` and any leftover
+  section paragraph, and never leaves a sub-heading alone at the foot of a page.
+- Upload no longer saves directly: the parsed sections fill the Add Book editor (each
+  starting with a Section title) for review, then Add Book saves them. Import treats
+  standard names (Preface, Copyright, Conclusion, About the Author…) and anything listed
+  in the book’s own Contents page as separate sections; the Contents list itself is
+  replaced by the automatic list. `sample_text` is generated from the first chapter.
+
 ## Help chatbot
 
 A "Help" chat button on the website and in the app (`shared/chat-widget.js`) sends

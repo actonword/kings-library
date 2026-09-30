@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,500;0,7..72,600;0,7..72,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/supabaseClient.js"></script>
+<script src="rich-editor.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   .login-view { height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -161,6 +162,10 @@
   .chapter-preview p.pf-indent { text-indent: 1.6em; }
   .chapter-preview p.pf-inset { margin-left: 2em; margin-right: 2em; }
   .chapter-preview p.pf-tight { margin-bottom: 0; }
+  .chapter-preview p.pf-heading { font-weight: 700; font-size: 1.12em; text-indent: 0; }
+  .chapter-preview p.pf-section { font-weight: 700; font-size: 1.35em; text-align: center; text-indent: 0; }
+  .chapter-preview .pv-break { font-family: var(--sans, sans-serif); font-size: 11px; color: #A07A2C; text-align: center; margin: 14px 0; border-top: 1px dashed #C79A42; padding-top: 6px; }
+  .chapter-editor { margin-bottom: 10px; }
   .chapter-preview b { font-weight: 700; }
   .serial-no { color: var(--text-on-ink-dim); font-variant-numeric: tabular-nums; }
   .nav-count { margin-left: auto; min-width: 18px; padding: 1px 6px; border-radius: 10px; background: var(--gold-bright); color: #1B140A; font-size: 11px; font-weight: 700; text-align: center; }
@@ -420,7 +425,11 @@
             </div>
             <div id="uploadStatus" class="upload-status"></div>
           </div>
-          <div class="form-field full"><label>Or paste the whole book's text here (not needed if you uploaded a file) — chapters are split automatically</label><textarea id="newBookContent" placeholder="Paste the full book text here. Lines like &quot;Chapter 1&quot;, &quot;Part Two&quot; or &quot;अध्याय 3&quot; start a new chapter."></textarea></div>
+          <div class="form-field full">
+            <label>Book text — uploading a file fills this in. Check the sections (each gold “NEW SECTION” line starts a new page), fix anything, then click Add Book.</label>
+            <div id="newBookEditor"></div>
+            <div class="upload-status" id="newBookStructure" style="margin-top:8px;"></div>
+          </div>
         </div>
         <div id="addBookError" style="display:none; color:var(--red); font-weight:600; font-size:12.5px; background:rgba(196,87,74,0.1); border:1px solid rgba(196,87,74,0.3); border-radius:6px; padding:10px 12px; margin-bottom:12px;"></div>
         <button class="btn btn-gold" onclick="addBook()">Add Book</button>
@@ -480,7 +489,7 @@
           <div id="replaceChaptersStatus" class="upload-status"></div>
         </div>
         <div id="chapterList"></div>
-        <button class="btn btn-gold" onclick="addChapterToCurrentBook()">+ Add Another Chapter</button>
+        <button class="btn btn-gold" onclick="addChapterToCurrentBook()">+ Add Another Section</button>
       </div>
     </div>
 
@@ -1180,6 +1189,7 @@ async function deleteRating(id) {
 }
 
 async function loadEverything() {
+  initNewBookEditor();
   await loadBooks();
   await loadPodcasts();
   await loadReaders();
@@ -1359,42 +1369,210 @@ async function saveBookDetails() {
   showToast('Book details saved.');
 }
 
+/* ---------- Book structure ⇄ editor (admin/rich-editor.js) ----------
+   In the editor a book is one document; each section (title page, copyright, chapters,
+   about the author…) begins with a paragraph marked "Section title". Saving splits the
+   document at those paragraphs into separate sections, each of which starts on a new page
+   in the reader. A "Sub-heading" right after a section title becomes that section's title. */
+const stripTags = (h) => String(h || '').replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+const isSectionPara = (p) => /^<p class="[^"]*\bsection\b[^"]*">/.test(p);
+const isSubheadingPara = (p) => /^<p class="[^"]*\bheading\b[^"]*">/.test(p);
+
+function sectionsToEditorContent(sections) {
+  return sections.map(s => [
+    `<p class="section">${escapeHtml(s.label || 'Section')}</p>`,
+    s.title ? `<p class="heading center">${escapeHtml(s.title)}</p>` : '',
+    s.content || '',
+  ].filter(Boolean).join('\n\n')).join('\n\n');
+}
+
+// Editor document → [{ label, title, content }]; text before the first section title has label null.
+function splitEditorContent(content) {
+  const paras = String(content || '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  const parts = [{ label: null, title: null, paras: [] }];
+  for (const p of paras) {
+    if (isSectionPara(p)) parts.push({ label: stripTags(p).slice(0, 80) || 'Section', title: null, paras: [] });
+    else parts[parts.length - 1].paras.push(p);
+  }
+  return parts.map(part => {
+    if (part.label && part.paras.length > 0 && isSubheadingPara(part.paras[0]) && stripTags(part.paras[0]).length <= 120) {
+      part.title = stripTags(part.paras.shift());
+    }
+    let content = part.paras.join('\n\n');
+    if (part.label && CONTENTS_HEADING_RE.test(sectionCore(part.label)) && !stripTags(content)) content = CONTENTS_MARKER;
+    return { label: part.label, title: part.title, content };
+  });
+}
+
+// Add Book: the editor's document → the sections to save.
+function chaptersForNewBook(content) {
+  const [before, ...sections] = splitEditorContent(content);
+  if (sections.length) {
+    const result = sections.map(s => ({ label: s.label, title: s.title, content: s.content }));
+    if (stripTags(before.content)) result.unshift({ label: 'Introduction', title: null, content: before.content });
+    return result;
+  }
+  // Nothing marked (typed or pasted straight in): find the sections the same way as for an uploaded file.
+  const paras = before.content.split(/\n\s*\n/).filter(p => p.trim());
+  if (!paras.length) return [];
+  const blocks = paras.map(p => {
+    const plain = stripTags(p);
+    return { text: p, plain, allBold: /^(<p[^>]*>)?\s*<b>[\s\S]*<\/b>\s*(<\/p>)?$/.test(p), heading: isHeadingLine(plain) };
+  });
+  const found = blocksToChapters(blocks);
+  return found.length > 1 ? found : [{ label: 'Chapter One', title: null, content: paras.join('\n\n') }];
+}
+
+// The website's free sample: the opening of the first real chapter (not copyright, contents…), as plain text.
+function makeSampleText(chapters) {
+  const readable = chapters.filter(c => c.content && c.content !== CONTENTS_MARKER && stripTags(c.content));
+  const first = readable.find(c => !isNamedSection(c.label || '')) || readable[0];
+  if (!first) return null;
+  const out = [];
+  let size = 0;
+  for (const p of first.content.split(/\n\s*\n/)) {
+    const t = stripTags(p);
+    if (!t || /^\[\[\w+\]\]$/.test(t)) continue;
+    out.push(t);
+    size += t.length;
+    if (size > 1200) break;
+  }
+  return out.join('\n\n') || null;
+}
+
+/* ---------- Add Book editor ---------- */
+let newBookEditor = null;
+let newBookStructureTimer = null;
+function initNewBookEditor() {
+  if (newBookEditor || !window.KLEditor) return;
+  newBookEditor = KLEditor.create(document.getElementById('newBookEditor'), {
+    tall: true,
+    placeholder: 'Upload a file above to fill this in — or type / paste the whole book here. Mark each section’s heading (Copyright, Preface, Chapter 1, About the Author…) as “Section title” so it starts on a new page.',
+  });
+  newBookEditor.element.addEventListener('input', () => {
+    clearTimeout(newBookStructureTimer);
+    newBookStructureTimer = setTimeout(renderNewBookStructure, 700);
+  });
+}
+function renderNewBookStructure() {
+  const el = document.getElementById('newBookStructure');
+  const chapters = newBookEditor ? chaptersForNewBook(newBookEditor.getContent()) : [];
+  el.innerHTML = chapters.length
+    ? `<strong>${chapters.length} section${chapters.length === 1 ? '' : 's'}</strong>, each starting on a new page: ${chapters.map((c, i) => `${i + 1}. ${escapeHtml(c.label)}${c.title ? ` — ${escapeHtml(c.title)}` : ''}`).join(' · ')}`
+    : '';
+}
+
+/* ---------- Content window: section editors & structure tools ---------- */
+const CHAPTER_EDITORS = {};
+const DIRTY_CHAPTERS = new Set();
+
+async function orderedChapters() {
+  const { data, error } = await sb.from('chapters').select('id, position, label, title, content').eq('book_id', contentModalBookId).order('position');
+  if (error) throw error;
+  return data || [];
+}
+
+// Positions are unique per book, so move everything out of the way first, then into place.
+async function renumberChapters(orderedIds) {
+  const step = async (offset) => {
+    const results = await Promise.all(orderedIds.map((id, i) => sb.from('chapters').update({ position: offset + i + 1 }).eq('id', id)));
+    const failed = results.find(r => r.error);
+    if (failed) throw failed.error;
+  };
+  await step(100000);
+  await step(0);
+}
+
+function okToLoseUnsavedEdits(exceptId) {
+  const others = [...DIRTY_CHAPTERS].filter(id => id !== exceptId);
+  return !others.length || confirm(`You have unsaved changes in ${others.length} other section${others.length === 1 ? '' : 's'}. Continue and lose them? (Click Cancel, then Save Changes on those sections first.)`);
+}
+
+async function moveChapter(chapterId, direction) {
+  if (!okToLoseUnsavedEdits()) return;
+  try {
+    const ids = (await orderedChapters()).map(c => c.id);
+    const i = ids.indexOf(chapterId), j = i + direction;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    await renumberChapters(ids);
+    showToast(direction < 0 ? 'Moved up.' : 'Moved down.');
+  } catch (e) { showToast('Could not move: ' + e.message); }
+  await loadAndRenderChapters();
+}
+
+async function mergeChapterIntoPrevious(chapterId) {
+  if (!okToLoseUnsavedEdits()) return;
+  try {
+    const list = await orderedChapters();
+    const i = list.findIndex(c => c.id === chapterId);
+    if (i <= 0) { showToast('This is the first section — there is nothing before it to merge into.'); return; }
+    const prev = list[i - 1], cur = list[i];
+    if (!confirm(`Merge “${cur.label || 'this section'}” into “${prev.label || 'the previous section'}”?\n\nIts heading becomes a sub-heading inside the previous section, so it will no longer start on its own page.`)) return;
+    const merged = [
+      prev.content,
+      cur.label ? `<p class="heading center">${escapeHtml(cur.label)}</p>` : '',
+      cur.title ? `<p class="heading center">${escapeHtml(cur.title)}</p>` : '',
+      cur.content === CONTENTS_MARKER ? '' : cur.content,
+    ].filter(x => x && x.trim()).join('\n\n');
+    const { error: upErr } = await sb.from('chapters').update({ content: merged }).eq('id', prev.id);
+    if (upErr) throw upErr;
+    const { error: delErr } = await sb.from('chapters').delete().eq('id', cur.id);
+    if (delErr) throw delErr;
+    showToast('Merged into the previous section.');
+  } catch (e) { showToast('Could not merge: ' + e.message); }
+  await loadAndRenderChapters();
+}
+
 async function loadAndRenderChapters() {
   const list = document.getElementById('chapterList');
   list.innerHTML = '<p style="color:var(--text-on-ink-dim);font-size:13px;">Loading…</p>';
   const { data: chapters, error } = await sb.from('chapters').select('*').eq('book_id', contentModalBookId).order('position');
+  Object.keys(CHAPTER_EDITORS).forEach(k => delete CHAPTER_EDITORS[k]);
+  DIRTY_CHAPTERS.clear();
   if (error) { list.innerHTML = `<p style="color:var(--red);font-size:13px;">Could not load chapters: ${error.message}</p>`; return; }
   if (!chapters || !chapters.length) {
-    list.innerHTML = `<p style="color:var(--red);font-size:13px;font-weight:600;">This book has NO chapters saved — readers see an empty book. Add one below.</p>`;
+    list.innerHTML = `<p style="color:var(--red);font-size:13px;font-weight:600;">This book has NO sections saved — readers see an empty book. Add one below.</p>`;
     return;
   }
-  list.innerHTML = chapters.map(c => `
+  list.innerHTML = chapters.map((c, i) => `
     <div class="chapter-item">
       <div class="chapter-item-head">
-        <strong>Chapter ${c.position}</strong>
-        <span>${(c.content || '').length.toLocaleString()} characters</span>
+        <strong>Section ${i + 1} of ${chapters.length}</strong>
+        <span>
+          ${(c.content || '').length.toLocaleString()} characters
+          <button class="btn btn-outline btn-tiny" onclick="moveChapter('${c.id}', -1)" ${i === 0 ? 'disabled' : ''} title="Move this section up">↑</button>
+          <button class="btn btn-outline btn-tiny" onclick="moveChapter('${c.id}', 1)" ${i === chapters.length - 1 ? 'disabled' : ''} title="Move this section down">↓</button>
+        </span>
       </div>
       <div class="form-grid" style="margin-bottom:10px;">
-        <div class="form-field"><label>Label (e.g. "Chapter One")</label><input type="text" data-chapter-label="${c.id}" value="${escapeHtml(c.label || '')}"></div>
-        <div class="form-field"><label>Title (optional)</label><input type="text" data-chapter-title="${c.id}" value="${escapeHtml(c.title || '')}"></div>
+        <div class="form-field"><label>Heading (e.g. "Chapter One", "Copyright", "About the Author")</label><input type="text" data-chapter-label="${c.id}" value="${escapeHtml(c.label || '')}"></div>
+        <div class="form-field"><label>Title under the heading (optional)</label><input type="text" data-chapter-title="${c.id}" value="${escapeHtml(c.title || '')}"></div>
       </div>
-      <textarea data-chapter-id="${c.id}">${escapeHtml(c.content || '')}</textarea>
+      <div class="chapter-editor" id="chapterEditor-${c.id}"></div>
       <div class="chapter-preview" id="chapterPreview-${c.id}" style="display:none;"></div>
       <div class="chapter-item-actions">
         <button class="btn btn-outline btn-tiny" id="chapterPreviewBtn-${c.id}" onclick="toggleChapterPreview('${c.id}')">Preview</button>
         <button class="btn btn-gold btn-tiny" onclick="saveChapter('${c.id}')">Save Changes</button>
-        <button class="btn btn-danger-outline btn-tiny" onclick="deleteChapter('${c.id}')">Delete Chapter</button>
+        ${i > 0 ? `<button class="btn btn-outline btn-tiny" onclick="mergeChapterIntoPrevious('${c.id}')" title="Join this section onto the end of the one before it">Merge into previous</button>` : ''}
+        <button class="btn btn-danger-outline btn-tiny" onclick="deleteChapter('${c.id}')">Delete Section</button>
       </div>
     </div>
   `).join('');
+  chapters.forEach(c => {
+    const ed = KLEditor.create(document.getElementById('chapterEditor-' + c.id), { content: c.content || '' });
+    ed.element.addEventListener('input', () => DIRTY_CHAPTERS.add(c.id));
+    CHAPTER_EDITORS[c.id] = ed;
+  });
 }
+
 
 /* ---------- Chapter preview ----------
    Shows a chapter the way the reader app displays it, from whatever is in the text box
    right now (so unsaved edits can be checked). These formatting rules mirror the app's
    sanitizeInline/parseStoredPara — keep the two in step. */
 const PREVIEW_INLINE_TAGS = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', SUP: 'sup', SUB: 'sub' };
-const PREVIEW_PARA_CLASSES = new Set(['center', 'right', 'left', 'justify', 'indent', 'inset', 'tight']);
+const PREVIEW_PARA_CLASSES = new Set(['center', 'right', 'left', 'justify', 'indent', 'inset', 'tight', 'heading', 'section']);
 
 function previewSanitizeInline(raw) {
   const tpl = document.createElement('template');
@@ -1434,32 +1612,58 @@ function toggleChapterPreview(chapterId) {
   }
   const label = document.querySelector(`input[data-chapter-label="${chapterId}"]`).value.trim();
   const title = document.querySelector(`input[data-chapter-title="${chapterId}"]`).value.trim();
-  const content = document.querySelector(`textarea[data-chapter-id="${chapterId}"]`).value;
+  const content = CHAPTER_EDITORS[chapterId].getContent();
   // Same heading rule as the app: with a title, the label sits small above it.
   const header = title
     ? `${label ? `<div class="pv-label">${previewSanitizeInline(label)}</div>` : ''}<div class="pv-title">${previewSanitizeInline(title)}</div>`
     : (label ? `<div class="pv-title">${previewSanitizeInline(label)}</div>` : '');
-  const paras = content.split(/\n\s*\n/).filter(p => p.trim()).map(previewParagraph).join('');
-  box.innerHTML = `<div class="pv-note">Preview — how readers see this chapter (page breaks depend on their screen)</div>${header}${paras || '<p><em>This chapter has no text.</em></p>'}`;
+  const paras = content.split(/\n\s*\n/).filter(p => p.trim()).map(p => {
+    const t = p.trim();
+    if (t === '[[pagebreak]]') return '<div class="pv-break">— the reader starts a new page here —</div>';
+    if (t === '[[contents]]') return '<div class="pv-break">— the list of chapters appears here —</div>';
+    return (isSectionPara(t) ? '<div class="pv-break">— new section: saved as a separate section on a new page —</div>' : '') + previewParagraph(t);
+  }).join('');
+  box.innerHTML = `<div class="pv-note">Preview — how readers see this section (page breaks depend on their screen)</div>${header}${paras || '<p><em>This section has no text.</em></p>'}`;
   box.style.display = 'block';
   btn.textContent = 'Hide Preview';
 }
 
 async function saveChapter(chapterId) {
-  const textarea = document.querySelector(`textarea[data-chapter-id="${chapterId}"]`);
   const labelInput = document.querySelector(`input[data-chapter-label="${chapterId}"]`);
   const titleInput = document.querySelector(`input[data-chapter-title="${chapterId}"]`);
-  const content = textarea.value.trim();
-  if (!content) { showToast('Chapter text cannot be empty.'); return; }
-  const { error } = await sb.from('chapters').update({
-    content,
-    label: labelInput.value.trim() || null,
-    title: titleInput.value.trim() || null,
-  }).eq('id', chapterId);
+  const parts = splitEditorContent(CHAPTER_EDITORS[chapterId].getContent());
+  const [first, ...extra] = parts;
+  let row = { label: labelInput.value.trim() || null, title: titleInput.value.trim() || null, content: first.content };
+  // The very first line was turned into a "Section title": it renames this section.
+  if (!stripTags(first.content) && !/\[\[\w+\]\]/.test(first.content) && extra.length) {
+    const s = extra.shift();
+    row = { label: s.label, title: s.title, content: s.content };
+  }
+  if (!row.content.trim() && !extra.length) { showToast('Section text cannot be empty.'); return; }
+  if (extra.length && !okToLoseUnsavedEdits(chapterId)) return;
+  const { error } = await sb.from('chapters').update(row).eq('id', chapterId);
   if (error) { showToast('Could not save: ' + error.message); return; }
-  showToast('Chapter saved.');
+  // "Section title" lines inside the text: each becomes a new section right after this one.
+  if (extra.length) {
+    try {
+      const { data: inserted, error: insErr } = await sb.from('chapters')
+        .insert(extra.map((s, k) => ({ book_id: contentModalBookId, position: 200000 + k, label: s.label, title: s.title, content: s.content })))
+        .select('id, position');
+      if (insErr) throw insErr;
+      const newIds = (inserted || []).sort((a, b) => a.position - b.position).map(r => r.id);
+      const ids = (await orderedChapters()).map(c => c.id).filter(id => !newIds.includes(id));
+      ids.splice(ids.indexOf(chapterId) + 1, 0, ...newIds);
+      await renumberChapters(ids);
+      showToast(`Saved — split into ${extra.length + 1} sections, each starting on a new page.`);
+    } catch (e) {
+      showToast('Saved, but splitting into sections failed: ' + e.message);
+    }
+  } else {
+    showToast('Section saved.');
+  }
   await loadAndRenderChapters();
 }
+
 
 async function deleteChapter(chapterId) {
   if (!confirm('Delete this chapter? This can\'t be undone.')) return;
@@ -1521,7 +1725,7 @@ async function addBook(asDraft = false) {
   const lang = document.getElementById('newBookLang').value.trim();
   const priceVal = document.getElementById('newBookPrice').value;
   const description = document.getElementById('newBookDescription').value.trim();
-  const contentText = document.getElementById('newBookContent').value.trim();
+  const chaptersToSave = newBookEditor ? chaptersForNewBook(newBookEditor.getContent()) : [];
   const errorBox = document.getElementById('addBookError');
 
   const missing = [];
@@ -1537,8 +1741,7 @@ async function addBook(asDraft = false) {
     errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
-  const hasEpubChapters = pendingEpubChapters && pendingEpubChapters.length > 0;
-  if (!contentText && !hasEpubChapters) {
+  if (!chaptersToSave.length) {
     if (!confirm("You haven't uploaded a readable book file or pasted any text. This book will be added but will show as EMPTY to readers — they won't be able to read anything. Add it anyway and paste the text later?")) {
       errorBox.style.display = 'block';
       errorBox.textContent = 'Not added — paste the chapter text first, or confirm the empty-book warning.';
@@ -1561,13 +1764,12 @@ async function addBook(asDraft = false) {
     description: description || null,
     cover_color: selectedColor,
     cover_image_url: coverImageUrl,
-    sample_text: contentText || null,
+    sample_text: makeSampleText(chaptersToSave),
     source_format: pendingSourceFormat || null,
     status: asDraft ? 'draft' : 'published',
   });
   if (error) { showToast('Could not add book: ' + error.message); return; }
 
-  const chaptersToSave = hasEpubChapters ? pendingEpubChapters : (contentText ? splitTextIntoChapters(contentText).chapters : []);
   const epubChapterCount = chaptersToSave.length;
   if (chaptersToSave.length) {
     const rows = chaptersToSave.map((c, i) => ({ book_id: id, position: i + 1, label: c.label, title: c.title || null, content: c.content }));
@@ -1582,7 +1784,8 @@ async function addBook(asDraft = false) {
   document.getElementById('newBookLang').value = '';
   document.getElementById('newBookPrice').value = '';
   document.getElementById('newBookDescription').value = '';
-  document.getElementById('newBookContent').value = '';
+  if (newBookEditor) newBookEditor.setContent('');
+  document.getElementById('newBookStructure').innerHTML = '';
   bookFileInput.value = '';
   uploadBox.classList.remove('has-file');
   document.getElementById('uploadBoxText').textContent = 'Click to choose a file — EPUB, Word (.docx), PDF, or text (.txt)';
@@ -2435,16 +2638,75 @@ function splitFrontMatter(preface, plainOf) {
   return result;
 }
 
+/* Named book sections that always get their own section (and so their own page) wherever
+   they appear — front matter, back matter, and the Contents page. A line only counts when
+   it looks like a heading (Word heading style, all bold, centred, or all capitals), so an
+   ordinary sentence starting "Conclusion" stays text. "Conclusion — The Last Word" counts too. */
+const SECTION_HEADING_RE = /^(title page|half title|preface|foreword|prologue|introduction|copyright( page)?|dedication|acknowledge?ments?|dedication\s*(&|and)\s*acknowledge?ments?|acknowledge?ments?\s*(&|and)\s*dedication|contents|table of contents|about (this|the) book|about the author|author'?s? (bio|biography|note)|meet the author|a note (to|for) the reader|epigraph|conclusion|epilogue|afterword|appendix(\s+[a-z0-9]+)?|glossary|bibliography|references|endnotes|final (word|words|thoughts|prayer)|closing (prayer|words|thoughts)|प्रस्तावना|भूमिका|आभार|समर्पण|समर्पण और आभार|विषय[- ]?सूची|अनुक्रमणिका|निष्कर्ष|उपसंहार|लेखक (के बारे में|परिचय)|इस पुस्तक के बारे में|ਭੂਮਿਕਾ|ਧੰਨਵਾਦ|ਸਮਰਪਣ|ਤਤਕਰਾ|ਸਿੱਟਾ|ਲੇਖਕ ਬਾਰੇ)$/i;
+
+const blockPlain = (b) => (b.plain ?? String(b.text).replace(/<[^>]+>/g, '').replace(/&amp;/g, '&')).replace(/\s+/g, ' ').trim();
+// "Conclusion — The Question Jesus Still Asks Us" → "Conclusion"
+const sectionCore = (plain) => plain.split(/\s+[—–-]\s+|:\s+/)[0].replace(/[.:]$/, '').trim();
+const isNamedSection = (plain) => SECTION_HEADING_RE.test(sectionCore(plain));
+
+function looksLikeHeading(b) {
+  const plain = blockPlain(b);
+  if (!plain || plain.length > 80 || /[.!?,;]$/.test(plain)) return false;
+  if (b.plain === undefined) return true;                      // plain text: a short line on its own
+  if (b.level != null || b.allBold) return true;               // Word heading style / all bold
+  if (/class="[^"]*\b(center|heading|section)\b/.test(b.text)) return true;
+  if (/[A-Za-z]/.test(plain) && plain === plain.toUpperCase()) return true; // ALL CAPITALS
+  return !/[A-Za-z]/.test(plain);                              // Hindi/Punjabi: no capitals to go by
+}
+
+// Normalised text for matching a contents entry with its real heading later in the book.
+// A trailing page number only counts after dot leaders or a wide gap ("Chapter 1 ...... 3"),
+// so "Chapter 1" keeps its number.
+const tocKey = (plain) => plain.toLowerCase().replace(/(\.{2,}|…+|·+|\t|\s{2,})\s*\d+$/, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+// Same heading, allowing extra words after it ("Introduction" ~ "Introduction — Why…"), whole
+// words only, so "chapter 1" never matches "chapter 10".
+const sameHeading = (a, b) => a === b || a.startsWith(b + ' ') || b.startsWith(a + ' ');
+
+/* Lines right after a "Contents" heading that repeat a heading found later in the book are
+   the contents list itself — drop them (the reader builds its own tappable list). */
+function dropContentsList(blocks) {
+  const out = [];
+  const entries = []; // normalised contents entries — the book's own list of its sections
+  for (let i = 0; i < blocks.length; i++) {
+    out.push(blocks[i]);
+    if (!CONTENTS_HEADING_RE.test(sectionCore(blockPlain(blocks[i])))) continue;
+    const laterKeys = blocks.map(b => tocKey(blockPlain(b)));
+    let j = i + 1;
+    while (j < blocks.length) {
+      const key = laterKeys[j];
+      if (!key || blockPlain(blocks[j]).length > 120) break;
+      const reappears = laterKeys.some((k, idx) => idx > j && k && k.length >= 3 && sameHeading(k, key));
+      if (!reappears) break;
+      entries.push(key);
+      j++;
+    }
+    // Keep going from the first real line after the list.
+    i = j - 1;
+  }
+  return { blocks: out, entries };
+}
+
 function blocksToChapters(blocks) {
   // Blocks from plain text have only .text; blocks from Word also carry .plain (text
-  // without formatting tags, used for detection) and .subheading (a smaller heading style).
-  const plainOf = b => (b.plain ?? b.text).trim();
+  // without formatting tags, used for detection), .level/.allBold (heading hints) and
+  // .subheading (a smaller heading style).
+  const plainOf = b => blockPlain(b);
+  // A heading-like line becomes a section when it has a standard name (Preface, Conclusion…)
+  // or when it's listed in the book's own Contents page, whatever it's called.
+  const toc = dropContentsList(blocks);
+  const inContents = (b) => { const k = tocKey(blockPlain(b)); return k.length >= 3 && toc.entries.some(e => sameHeading(e, k)); };
+  blocks = toc.blocks.map(b => (!b.heading && looksLikeHeading(b) && (isNamedSection(blockPlain(b)) || inContents(b)) ? { ...b, heading: true, named: true } : b));
   const chapters = [];
   let current = null;
   let preface = [];
   for (const b of blocks) {
     if (b.heading) {
-      current = { label: plainOf(b).slice(0, 80), paras: [] };
+      current = { label: plainOf(b).slice(0, 80), paras: [], named: b.named || isNamedSection(plainOf(b)) };
       chapters.push(current);
     } else if (current) {
       current.paras.push(b);
@@ -2454,13 +2716,20 @@ function blocksToChapters(blocks) {
   }
   const result = splitFrontMatter(preface, plainOf);
   for (const c of chapters) {
+    if (CONTENTS_HEADING_RE.test(sectionCore(c.label))) {
+      result.push({ label: c.label, title: null, content: CONTENTS_MARKER });
+      continue;
+    }
     // "Chapter 3" followed by a short line (or a smaller heading) is usually the chapter's name — use it as the title.
     let title = null;
     const first = c.paras[0];
     if (c.paras.length > 1 && (first.subheading || (plainOf(first).length <= 80 && !/[.!?]$/.test(plainOf(first)) && /^(chapter|part|book|अध्याय|ਅਧਿਆਇ|باب|الفصل)/i.test(c.label) && c.label.split(/\s+/).length <= 3))) {
       title = plainOf(c.paras.shift()).slice(0, 120);
     }
-    if (c.paras.map(plainOf).join('').length < 150) continue;
+    const length = c.paras.map(plainOf).join('').length;
+    // Named sections (copyright, dedication…) can be short; anything else this short is
+    // a stray heading-like line, not a chapter.
+    if (length === 0 || (!c.named && length < 150)) continue;
     result.push({ label: c.label, title, content: c.paras.map(b => b.text).join('\n\n').trim() });
   }
   return result;
@@ -2818,13 +3087,15 @@ bookFileInput.addEventListener('change', async () => {
   try {
     const result = await parseBookFile(file);
     if (!result.chapters.length) throw new Error('no readable text found');
-    pendingEpubChapters = result.chapters;
+    initNewBookEditor();
+    newBookEditor.setContent(sectionsToEditorContent(result.chapters));
+    renderNewBookStructure();
     statusEl.style.color = 'var(--green)';
-    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> ${describeParsedChapters(result)} These will be added automatically when you click "Add Book" — you can rename or fix them afterward with the "Content" button.`;
+    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> ${describeParsedChapters(result)} They're in the editor below — check them, fix anything, then click "Add Book".`;
   } catch (e) {
     pendingEpubChapters = null;
     statusEl.className = 'upload-status warn';
-    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Couldn't read this file automatically (${escapeHtml(e.message)}). You can paste the book's text into the box below instead.`;
+    statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Couldn't read this file automatically (${escapeHtml(e.message)}). You can paste the book's text into the editor below instead — pasting from Word keeps its formatting.`;
   }
 });
 
