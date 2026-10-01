@@ -23,6 +23,7 @@
   .kle-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border-bottom: 1px solid rgba(233,226,208,0.1); background: #141F2C; position: sticky; top: 0; z-index: 2; }
   .kle-btn { min-width: 32px; height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid transparent; background: none; color: #E9E2D0; cursor: pointer; font: 600 13px/1 'Inter', sans-serif; }
   .kle-btn:hover { background: rgba(240,194,94,0.1); }
+  .kle-icon { display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
   .kle-btn[aria-pressed="true"] { background: rgba(240,194,94,0.18); border-color: rgba(240,194,94,0.5); color: #F0C25E; }
   .kle-sep { width: 1px; background: rgba(233,226,208,0.12); margin: 3px 3px; }
   .kle-select { height: 30px; border-radius: 6px; background: #0A121C; color: #E9E2D0; border: 1px solid rgba(233,226,208,0.16); font: 13px 'Inter', sans-serif; padding: 0 6px; }
@@ -40,6 +41,15 @@
   .kle-marker { margin: 14px 0; padding: 8px; border: 2px dashed #C79A42; border-radius: 6px; text-align: center; color: #8A6A2A;
     font: 600 12px 'Inter', sans-serif; background: rgba(199,154,66,0.08); user-select: none; cursor: default; }
   .kle-help { font-size: 11.5px; color: #93A0A8; padding: 6px 10px; border-top: 1px solid rgba(233,226,208,0.08); }`;
+
+  // Alignment icons drawn as lines (like Word) — symbol characters don't display on every computer.
+  const lines = (rows) => `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">${rows.map(([x1, x2], i) => `<path d="M${x1} ${3 + i * 4}h${x2 - x1}"/>`).join('')}</svg>`;
+  const ICONS = {
+    left: lines([[2, 16], [2, 11], [2, 16], [2, 11]]),
+    center: lines([[2, 16], [5, 13], [2, 16], [5, 13]]),
+    right: lines([[2, 16], [7, 16], [2, 16], [7, 16]]),
+    justify: lines([[2, 16], [2, 16], [2, 16], [2, 16]]),
+  };
 
   let styleAdded = false;
   const escapeText = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -166,10 +176,10 @@
           <button type="button" class="kle-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
           <button type="button" class="kle-btn" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
           <span class="kle-sep"></span>
-          <button type="button" class="kle-btn" data-align="left" title="Align left">⯇</button>
-          <button type="button" class="kle-btn" data-align="center" title="Centre">≡</button>
-          <button type="button" class="kle-btn" data-align="right" title="Align right">⯈</button>
-          <button type="button" class="kle-btn" data-align="justify" title="Justify (both edges straight — the default)">☰</button>
+          <button type="button" class="kle-btn kle-icon" data-align="left" title="Align left" aria-label="Align left">${ICONS.left}</button>
+          <button type="button" class="kle-btn kle-icon" data-align="center" title="Align centre" aria-label="Align centre">${ICONS.center}</button>
+          <button type="button" class="kle-btn kle-icon" data-align="right" title="Align right" aria-label="Align right">${ICONS.right}</button>
+          <button type="button" class="kle-btn kle-icon" data-align="justify" title="Justify — both edges straight (the default)" aria-label="Justify">${ICONS.justify}</button>
           <span class="kle-sep"></span>
           <button type="button" class="kle-btn" data-toggle="indent" title="First-line indent">¶→</button>
           <button type="button" class="kle-btn" data-toggle="inset" title="Indented block (quotes, verses)">⇥</button>
