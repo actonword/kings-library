@@ -1418,6 +1418,7 @@ function chaptersForNewBook(content) {
   const paras = before.content.split(/\n\s*\n/).filter(p => p.trim());
   if (!paras.length) return [];
   const blocks = paras.map(p => {
+    if (/^\[\[image:/.test(p.trim())) return { text: p, plain: '', isImage: true, heading: false };
     const plain = stripTags(p);
     return { text: p, plain, allBold: /^(<p[^>]*>)?\s*<b>[\s\S]*<\/b>\s*(<\/p>)?$/.test(p), heading: isHeadingLine(plain) };
   });
@@ -1434,7 +1435,7 @@ function makeSampleText(chapters) {
   let size = 0;
   for (const p of first.content.split(/\n\s*\n/)) {
     const t = stripTags(p);
-    if (!t || /^\[\[\w+\]\]$/.test(t)) continue;
+    if (!t || /^\[\[\w+(\]\]$|:)/.test(t)) continue; // page breaks, contents, pictures
     out.push(t);
     size += t.length;
     if (size > 1200) break;
@@ -1449,6 +1450,7 @@ function initNewBookEditor() {
   if (newBookEditor || !window.KLEditor) return;
   newBookEditor = KLEditor.create(document.getElementById('newBookEditor'), {
     tall: true,
+    uploadImage: (file) => uploadBookImage(file, NEW_BOOK_IMAGE_FOLDER),
     placeholder: 'Upload a file above to fill this in — or type / paste the whole book here. Mark each section’s heading (Copyright, Preface, Chapter 1, About the Author…) as “Section title” so it starts on a new page.',
   });
   newBookEditor.element.addEventListener('input', () => {
@@ -1561,8 +1563,9 @@ async function loadAndRenderChapters() {
       </div>
     </div>
   `).join('');
+  const bookId = contentModalBookId;
   chapters.forEach(c => {
-    const ed = KLEditor.create(document.getElementById('chapterEditor-' + c.id), { content: c.content || '' });
+    const ed = KLEditor.create(document.getElementById('chapterEditor-' + c.id), { content: c.content || '', uploadImage: (file) => uploadBookImage(file, bookId) });
     ed.element.addEventListener('input', () => DIRTY_CHAPTERS.add(c.id));
     CHAPTER_EDITORS[c.id] = ed;
   });
@@ -1596,6 +1599,12 @@ function previewSanitizeInline(raw) {
 }
 
 function previewParagraph(raw) {
+  const img = KLEditor.parseImageMarker(raw);
+  if (img) {
+    const width = { small: 40, medium: 70, full: 100 }[img.size];
+    return `<figure style="margin:10px 0 16px;text-align:center;"><img src="${escapeHtml(img.src)}" alt="" style="width:${width}%;max-width:${img.w}px;max-height:520px;object-fit:contain;">`
+      + `${img.caption ? `<figcaption style="font-style:italic;font-size:14px;margin-top:6px;">${escapeHtml(img.caption)}</figcaption>` : ''}</figure>`;
+  }
   let cls = '', inner = raw.trim();
   const m = inner.match(/^<p(?:\s+class="([^"]*)")?\s*>([\s\S]*)<\/p>$/i);
   if (m) {
@@ -1720,6 +1729,49 @@ async function uploadCoverImage(idPrefix, file) {
   const { data } = sb.storage.from('covers').getPublicUrl(path);
   return data.publicUrl;
 }
+
+/* Pictures inside books (editor, pasted, or found in an uploaded Word/EPUB file).
+   Shrunk to at most 1600px — plenty for any phone or tablet — and saved as WebP (PNG/JPEG
+   where the browser can't make WebP) in the public covers bucket under book-images/. */
+const BOOK_IMAGE_MAX = 1600;
+const STORAGE_FILE_LIMIT = 5 * 1024 * 1024; // the covers bucket's limit
+const canvasBlob = (canvas, type, quality) => new Promise(resolve => canvas.toBlob(resolve, type, quality));
+
+async function prepareBookImage(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error('this picture type can\'t be shown on phones — save it as PNG or JPG'));
+      im.src = url;
+    });
+    let w = img.naturalWidth || 800, h = img.naturalHeight || 600;
+    const scale = Math.min(1, BOOK_IMAGE_MAX / Math.max(w, h));
+    w = Math.max(1, Math.round(w * scale)); h = Math.max(1, Math.round(h * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    let out = await canvasBlob(canvas, 'image/webp', 0.86);
+    if (!out || out.type !== 'image/webp') out = await canvasBlob(canvas, 'image/png');
+    if (!out || out.size > STORAGE_FILE_LIMIT) out = await canvasBlob(canvas, 'image/jpeg', 0.85);
+    if (!out) throw new Error('could not prepare this picture');
+    return { blob: out, w, h, ext: { 'image/webp': 'webp', 'image/png': 'png' }[out.type] || 'jpg' };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function uploadBookImage(blob, folder) {
+  const p = await prepareBookImage(blob);
+  const path = `book-images/${folder}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${p.ext}`;
+  const { error } = await sb.storage.from('covers').upload(path, p.blob, { contentType: p.blob.type, cacheControl: '31536000' });
+  if (error) throw error;
+  const { data } = sb.storage.from('covers').getPublicUrl(path);
+  return { url: data.publicUrl, w: p.w, h: p.h };
+}
+// Pictures added before a new book is saved (it has no id yet) share one folder per visit.
+const NEW_BOOK_IMAGE_FOLDER = 'new-' + Date.now().toString(36);
 
 // asDraft: save the book hidden from the website and app until "Publish" is clicked.
 async function addBook(asDraft = false) {
@@ -2543,8 +2595,14 @@ function resolveZipPath(zip, path) {
   return match ? zip.file(match) : null;
 }
 
-async function parseEpubFile(file) {
+/* EPUB chapters keep their formatting (bold, italics, headings, centring — the same
+   conversion as pasting) and their pictures. Picture-only pages: the cover is left out
+   (the reader app shows the book's cover itself); other full-page pictures are kept
+   with the chapter around them. */
+async function parseEpubFile(file, opts = {}) {
   const zip = await JSZip.loadAsync(file);
+  const images = { added: 0, skipped: 0, unsupported: 0, shapes: 0 };
+  const loadImage = makeImageLoader(zip, opts, images);
   const containerEntry = resolveZipPath(zip, 'META-INF/container.xml');
   if (!containerEntry) throw new Error('not a valid EPUB (missing container.xml)');
   const containerXml = await containerEntry.async('text');
@@ -2565,20 +2623,58 @@ async function parseEpubFile(file) {
   if (!spineIds.length) throw new Error('this EPUB has no chapters listed');
 
   const chapters = [];
-  for (const id of spineIds) {
+  let waiting = []; // picture pages before the first chapter
+  for (const [spineIdx, id] of spineIds.entries()) {
     const href = manifest[id];
     if (!href) continue;
-    const entry = resolveZipPath(zip, opfDir + decodeURIComponent(href));
+    const chapterPath = zipJoin(opfDir, decodeURIComponent(href));
+    const entry = resolveZipPath(zip, chapterPath);
     if (!entry) continue;
     const html = await entry.async('text');
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const text = htmlDocToPlainText(doc);
-    if (!text || text.length < 20) continue; // skip cover/blank pages
-    const heading = doc.querySelector('h1, h2, h3, title');
+    const heading = doc.querySelector('h1, h2, h3') || doc.querySelector('title');
     const label = heading ? heading.textContent.trim().slice(0, 80) : `Chapter ${chapters.length + 1}`;
-    chapters.push({ label, content: text });
+    if (!window.KLEditor) { // fallback: plain text only
+      const text = htmlDocToPlainText(doc);
+      if (text && text.length >= 20) chapters.push({ label, content: text });
+      continue;
+    }
+
+    // Pictures: <img>, and <svg><image> (often used for full-page pictures).
+    const chapterDir = chapterPath.includes('/') ? chapterPath.slice(0, chapterPath.lastIndexOf('/') + 1) : '';
+    const pics = Array.from(doc.querySelectorAll('img, image'));
+    const isCoverPage = spineIdx === 0 || /cover/i.test(id + ' ' + href);
+    const bodyText = (doc.body ? doc.body.textContent : '').replace(/\s+/g, ' ').trim();
+    if (isCoverPage && bodyText.length < 20) continue; // the cover — the app shows it from the book's cover image
+    for (const pic of pics) {
+      const src = pic.getAttribute('src') || pic.getAttribute('xlink:href') || pic.getAttribute('href') || '';
+      const holder = pic.closest('svg') || pic;
+      const r = src && !/^(https?:|data:)/i.test(src) ? await loadImage(zipJoin(chapterDir, decodeURIComponent(src.split('#')[0]))) : null;
+      if (!r) { holder.remove(); continue; }
+      const img = doc.createElement('img');
+      img.setAttribute('src', r.url);
+      img.dataset.w = r.w; img.dataset.h = r.h;
+      img.dataset.size = KLEditor.sizeFor(r.w);
+      holder.replaceWith(img);
+    }
+    doc.querySelectorAll('script, style').forEach(el => el.remove());
+    let paras = KLEditor.paragraphsFromHtml(doc.body ? doc.body.innerHTML : '');
+    // The chapter's own heading is already its label.
+    if (paras.length && heading && stripTags(paras[0]) === heading.textContent.replace(/\s+/g, ' ').trim()) paras = paras.slice(1);
+    const text = paras.filter(p => !/^\[\[image:/.test(p)).map(stripTags).join(' ');
+    const hasPictures = paras.some(p => /^\[\[image:/.test(p));
+    if (text.length < 20) {
+      if (!hasPictures) continue; // blank page
+      // A page that is just a picture belongs with the chapter around it.
+      const picsOnly = paras.filter(p => /^\[\[image:/.test(p));
+      if (chapters.length) chapters[chapters.length - 1].content += '\n\n' + picsOnly.join('\n\n');
+      else waiting.push(...picsOnly);
+      continue;
+    }
+    if (waiting.length) { paras = [...waiting, ...paras]; waiting = []; }
+    chapters.push({ label, content: paras.join('\n\n') });
   }
-  return chapters;
+  return { chapters, images };
 }
 
 /* ---------- Word / PDF / text → chapters ----------
@@ -2635,8 +2731,9 @@ function splitFrontMatter(preface, plainOf) {
     }
     const text = s.blocks.map(b => b.text).join('\n\n').trim();
     const plainLength = s.blocks.map(plainOf).join('').length;
-    // Keep every titled section; the untitled opening part only if it has real text.
-    if (i > 0 ? plainLength > 0 : plainLength >= 20) result.push({ label: s.label, title: null, content: text });
+    const hasImage = s.blocks.some(b => b.isImage);
+    // Keep every titled section; the untitled opening part only if it has real text (or a picture).
+    if (hasImage || (i > 0 ? plainLength > 0 : plainLength >= 20)) result.push({ label: s.label, title: null, content: text });
   });
   return result;
 }
@@ -2726,13 +2823,14 @@ function blocksToChapters(blocks) {
     // "Chapter 3" followed by a short line (or a smaller heading) is usually the chapter's name — use it as the title.
     let title = null;
     const first = c.paras[0];
-    if (c.paras.length > 1 && (first.subheading || (plainOf(first).length <= 80 && !/[.!?]$/.test(plainOf(first)) && /^(chapter|part|book|अध्याय|ਅਧਿਆਇ|باب|الفصل)/i.test(c.label) && c.label.split(/\s+/).length <= 3))) {
+    if (c.paras.length > 1 && !first.isImage && (first.subheading || (plainOf(first).length <= 80 && !/[.!?]$/.test(plainOf(first)) && /^(chapter|part|book|अध्याय|ਅਧਿਆਇ|باب|الفصل)/i.test(c.label) && c.label.split(/\s+/).length <= 3))) {
       title = plainOf(c.paras.shift()).slice(0, 120);
     }
     const length = c.paras.map(plainOf).join('').length;
+    const hasImage = c.paras.some(b => b.isImage);
     // Named sections (copyright, dedication…) can be short; anything else this short is
-    // a stray heading-like line, not a chapter.
-    if (length === 0 || (!c.named && length < 150)) continue;
+    // a stray heading-like line, not a chapter — unless it holds a picture.
+    if (!hasImage && (length === 0 || (!c.named && length < 150))) continue;
     result.push({ label: c.label, title, content: c.paras.map(b => b.text).join('\n\n').trim() });
   }
   return result;
@@ -2850,7 +2948,64 @@ function escapeXmlText(s) {
   return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
-async function parseDocxFile(file) {
+/* ---------- Pictures in uploaded files ----------
+   opts.uploadImage(blob) → { url, w, h } stores a picture (see uploadBookImage); without it
+   (or when a picture can't be used) pictures are counted and left out. */
+const IMAGE_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml', tif: 'image/tiff', tiff: 'image/tiff', emf: 'image/emf', wmf: 'image/wmf' };
+const BROWSER_IMAGE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+
+// Uploads each picture once, however many times the file uses it.
+function makeImageLoader(zip, opts, stats) {
+  const cache = {};
+  let done = 0;
+  return (path) => {
+    if (!(path in cache)) {
+      cache[path] = (async () => {
+        if (!BROWSER_IMAGE.test(path)) { stats.unsupported++; return null; } // e.g. old Windows drawings (.emf/.wmf)
+        const entry = resolveZipPath(zip, path);
+        if (!entry || !opts.uploadImage) { stats.skipped++; return null; }
+        try {
+          const ext = path.split('.').pop().toLowerCase();
+          const blob = new Blob([await entry.async('uint8array')], { type: IMAGE_MIME[ext] || '' });
+          if (opts.onProgress) opts.onProgress(`Adding pictures from the file… ${++done}`);
+          const r = await opts.uploadImage(blob);
+          stats.added++;
+          return r;
+        } catch (e) {
+          stats.skipped++;
+          stats.error = e.message || String(e);
+          return null;
+        }
+      })();
+    }
+    return cache[path];
+  };
+}
+
+// "media/image1.png" relative to "word/" → "word/media/image1.png" (also handles ../ and /word/…)
+function zipJoin(dir, target) {
+  if (target.startsWith('/')) return target.slice(1);
+  const parts = (dir + target).split('/');
+  const out = [];
+  for (const p of parts) { if (p === '..') out.pop(); else if (p && p !== '.') out.push(p); }
+  return out.join('/');
+}
+
+const DOCX_NS = {
+  a: 'http://schemas.openxmlformats.org/drawingml/2006/main',
+  r: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  wp: 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+  v: 'urn:schemas-microsoft-com:vml',
+};
+// Wingdings symbols Word uses for smileys, ticks and bullets → the same characters as text.
+const WINGDINGS = { '4A': '😊', '4B': '😐', '4C': '☹', 'FC': '✔', 'FB': '✘', 'FE': '☑', 'A8': '☐', '6C': '●', '6E': '■', 'A7': '▪', '71': '❑', '76': '❖', 'D8': '➢', 'E8': '➔' };
+function wingdingsChar(sym) {
+  if (!/wingdings/i.test(wVal(sym, 'font') || '')) return null;
+  const code = String(wVal(sym, 'char') || '').toUpperCase().replace(/^F0/, '');
+  return WINGDINGS[code] || null;
+}
+
+async function parseDocxFile(file, opts = {}) {
   const zip = await JSZip.loadAsync(file);
   const docEntry = resolveZipPath(zip, 'word/document.xml');
   if (!docEntry) throw new Error('this doesn\'t look like a Word .docx file');
@@ -2858,8 +3013,55 @@ async function parseDocxFile(file) {
   const stylesEntry = resolveZipPath(zip, 'word/styles.xml');
   const styles = readDocxStyles(stylesEntry ? new DOMParser().parseFromString(await stylesEntry.async('text'), 'application/xml') : null);
 
+  // Pictures: relationship id → file inside the .docx.
+  const rels = {};
+  const relsEntry = resolveZipPath(zip, 'word/_rels/document.xml.rels');
+  if (relsEntry) {
+    const relsDoc = new DOMParser().parseFromString(await relsEntry.async('text'), 'application/xml');
+    Array.from(relsDoc.getElementsByTagName('Relationship')).forEach(r => {
+      if (r.getAttribute('TargetMode') !== 'External') rels[r.getAttribute('Id')] = zipJoin('word/', r.getAttribute('Target') || '');
+    });
+  }
+  const images = { added: 0, skipped: 0, unsupported: 0, shapes: 0 };
+  const loadImage = makeImageLoader(zip, opts, images);
+
   const body = doc.getElementsByTagNameNS(W_NS, 'body')[0];
   if (!body) throw new Error('no text found in this Word file');
+  // Width of the text on Word's page (EMU), to size pictures the way they look in Word.
+  const sect = body.getElementsByTagNameNS(W_NS, 'sectPr')[0];
+  const pgW = Number(wVal(wKid(sect, 'pgSz'), 'w')) || 11906;
+  const pgMar = wKid(sect, 'pgMar');
+  const textTwips = Math.max(3000, pgW - (Number(wVal(pgMar, 'left')) || 1440) - (Number(wVal(pgMar, 'right')) || 1440));
+  const sizeFromEmu = (cx) => { const r = cx / (textTwips * 635); return !cx ? null : r < 0.42 ? 'small' : r < 0.8 ? 'medium' : 'full'; };
+
+  // A picture in a run: <w:drawing> (modern) or <w:pict> (older VML), possibly wrapped in
+  // <mc:AlternateContent> with both versions — only one is used.
+  const pictureSegs = (el) => {
+    const out = [];
+    let drawing = el;
+    if (el.localName === 'AlternateContent') {
+      drawing = el.getElementsByTagNameNS(W_NS, 'drawing')[0] || el.getElementsByTagNameNS(W_NS, 'pict')[0];
+      if (!drawing) return out;
+    }
+    if (drawing.localName === 'drawing') {
+      const ext = drawing.getElementsByTagNameNS(DOCX_NS.wp, 'extent')[0];
+      const cx = Number(ext && ext.getAttribute('cx')) || 0;
+      const blips = Array.from(drawing.getElementsByTagNameNS(DOCX_NS.a, 'blip'));
+      blips.forEach(b => {
+        const path = rels[b.getAttributeNS(DOCX_NS.r, 'embed') || b.getAttribute('r:embed')];
+        if (path) out.push({ img: { path, size: blips.length === 1 ? sizeFromEmu(cx) : null } });
+      });
+      // Shapes, SmartArt and charts drawn in Word aren't pictures — unless they're text boxes, whose text is read anyway.
+      if (!blips.length && !drawing.getElementsByTagNameNS(W_NS, 'txbxContent').length) images.shapes++;
+    } else if (drawing.localName === 'pict') {
+      Array.from(drawing.getElementsByTagNameNS(DOCX_NS.v, 'imagedata')).forEach(d => {
+        const path = rels[d.getAttributeNS(DOCX_NS.r, 'id') || d.getAttribute('r:id')];
+        if (path) out.push({ img: { path, size: null } });
+      });
+    }
+    return out;
+  };
+
   const paras = [];
   for (const p of Array.from(body.getElementsByTagNameNS(W_NS, 'p'))) {
     const pPr = wKid(p, 'pPr');
@@ -2880,9 +3082,12 @@ async function parseDocxFile(file) {
       const rPr = wKid(r, 'rPr');
       const fmt = { ...baseR, ...styles.resolve(wVal(wKid(rPr, 'rStyle'))).r, ...readDocxRPr(rPr) };
       for (const n of Array.from(r.childNodes)) {
-        if (n.nodeType !== 1 || n.namespaceURI !== W_NS) continue;
+        if (n.nodeType !== 1) continue;
+        if (n.localName === 'drawing' || n.localName === 'pict' || n.localName === 'AlternateContent') { segs.push(...pictureSegs(n)); continue; }
+        if (n.namespaceURI !== W_NS) continue;
         let piece = null;
         if (n.localName === 't') piece = escapeXmlText(n.textContent);
+        else if (n.localName === 'sym') piece = wingdingsChar(n);
         else if (n.localName === 'tab') piece = ' ';
         else if (n.localName === 'noBreakHyphen') piece = '-';
         else if ((n.localName === 'br' && wVal(n, 'type') !== 'page' && wVal(n, 'type') !== 'column') || n.localName === 'cr') piece = '<br>';
@@ -2890,9 +3095,14 @@ async function parseDocxFile(file) {
       }
     }
 
+    // Pictures split the paragraph: its text before the picture, the picture, the text after.
+    const groups = [[]];
+    for (const s of segs) { if (s.img) groups.push(s, []); else groups[groups.length - 1].push(s); }
+
     // Merge neighbouring runs with the same look, then wrap each in its tags.
+    const buildText = (segList) => {
     const merged = [];
-    for (const s of segs) {
+    for (const s of segList) {
       const last = merged[merged.length - 1];
       if (last && last.b === s.b && last.i === s.i && last.u === s.u && last.va === s.va && last.color === s.color) last.t += s.t;
       else merged.push({ ...s });
@@ -2912,8 +3122,8 @@ async function parseDocxFile(file) {
       if (s.color) t = `<kl-${s.color}>${t}</kl-${s.color}>`;
       html += t;
     }
-    html = html.replace(/^(\s|<br>)+|(\s|<br>)+$/g, '');
-    plain = plain.trim();
+    return { html: html.replace(/^(\s|<br>)+|(\s|<br>)+$/g, ''), plain: plain.trim(), allBold };
+    };
 
     let level = null;
     if (Number.isFinite(pp.outline) && pp.outline < 9) level = pp.outline;
@@ -2929,7 +3139,20 @@ async function parseDocxFile(file) {
     if ((pp.indFirst || 0) >= 200) cls.push('indent');
     if ((pp.indLeft || 0) >= 360) cls.push('inset');
 
-    paras.push({ html, plain, cls, after: pp.after || 0, before: pp.before || 0, level, isTitleStyle, allBold: allBold && !!plain, empty: !plain });
+    for (const g of groups) {
+      if (!Array.isArray(g)) { paras.push({ image: g.img, plain: '', cls: [], after: 200, before: 200, empty: false }); continue; }
+      const { html, plain, allBold } = buildText(g);
+      // An empty bit of text next to a picture isn't an empty paragraph — it's just nothing.
+      if (!plain && groups.length > 1) continue;
+      paras.push({ html, plain, cls, after: pp.after || 0, before: pp.before || 0, level, isTitleStyle, allBold: allBold && !!plain, empty: !plain });
+    }
+  }
+
+  // Upload the pictures (each file once) and turn them into picture paragraphs.
+  for (const p of paras) {
+    if (!p.image) continue;
+    const r = await loadImage(p.image.path);
+    p.marker = r ? KLEditor.imageMarker({ src: r.url, w: r.w, h: r.h, size: p.image.size || KLEditor.sizeFor(r.w), caption: '' }) : null;
   }
 
   // Spacing: a paragraph with (almost) no space after it in Word runs straight into the
@@ -2937,13 +3160,14 @@ async function parseDocxFile(file) {
   const blocks = [];
   paras.forEach((p, idx) => {
     if (p.empty) return;
+    if (p.image) { if (p.marker) blocks.push({ text: p.marker, plain: '', isImage: true }); return; }
     const next = paras[idx + 1];
     const cls = [...p.cls];
     if (p.after < 100 && next && !next.empty && next.before < 100) cls.push('tight');
     const text = cls.length ? `<p class="${cls.join(' ')}">${p.html}</p>` : p.html;
     blocks.push({ text, plain: p.plain, level: p.level, isTitleStyle: p.isTitleStyle, allBold: p.allBold });
   });
-  if (!blocks.length) throw new Error('no text found in this Word file');
+  if (!blocks.some(b => !b.isImage)) throw new Error('no text found in this Word file');
 
   const tryWith = (isHeading, isSub = () => false) => {
     const marked = blocks.map(b => ({ ...b, heading: isHeading(b), subheading: !isHeading(b) && isSub(b) }));
@@ -2961,11 +3185,11 @@ async function parseDocxFile(file) {
     const boldHeads = blocks.filter(b => b.allBold && b.plain.length <= 60 && !/[.,;:!?]$/.test(b.plain) && !b.plain.includes('\n'));
     if (boldHeads.length >= 2 && boldHeads.length <= 200) chapters = tryWith(b => boldHeads.includes(b));
   }
-  if (chapters) return { chapters, detected: true };
+  if (chapters) return { chapters, detected: true, images };
 
   const total = blocks.reduce((s, b) => s + b.plain.length, 0);
-  if (total > 30000) return { chapters: chunkIntoParts(blocks.map(b => b.text)), detected: false };
-  return { chapters: [{ label: 'Chapter One', title: null, content: blocks.map(b => b.text).join('\n\n') }], detected: false };
+  if (total > 30000) return { chapters: chunkIntoParts(blocks.map(b => b.text)), detected: false, images };
+  return { chapters: [{ label: 'Chapter One', title: null, content: blocks.map(b => b.text).join('\n\n') }], detected: false, images };
 }
 
 async function parsePdfFile(file) {
@@ -3052,14 +3276,14 @@ async function parsePdfFile(file) {
   return byWords;
 }
 
-async function parseBookFile(file) {
+async function parseBookFile(file, opts = {}) {
   const ext = file.name.split('.').pop().toLowerCase();
   if (ext === 'epub') {
-    const chapters = (await parseEpubFile(file)).map(c => ({ ...c, title: null }));
-    return { chapters, detected: chapters.length > 1 };
+    const { chapters, images } = await parseEpubFile(file, opts);
+    return { chapters: chapters.map(c => ({ ...c, title: null })), detected: chapters.length > 1, images };
   }
-  if (ext === 'docx') return parseDocxFile(file);
-  if (ext === 'pdf') return parsePdfFile(file);
+  if (ext === 'docx') return parseDocxFile(file, opts);
+  if (ext === 'pdf') return { ...(await parsePdfFile(file)), pdf: true };
   if (ext === 'txt') return splitTextIntoChapters(await file.text());
   throw new Error(ext === 'doc' ? 'old .doc Word files can\'t be read — open it in Word and "Save As" .docx' : `.${ext} files aren't supported`);
 }
@@ -3073,7 +3297,20 @@ function describeParsedChapters(result) {
     : chapters.length > 1
       ? `No chapter headings found, so the text was split into ${chapters.length} parts`
       : `No chapter headings found — the whole text will be one chapter`;
-  return `${how} (${totalChars.toLocaleString()} characters): ${names}.`;
+  return `${how} (${totalChars.toLocaleString()} characters): ${names}.${imageNote(result)}`;
+}
+
+// What happened to the file's pictures, in plain words.
+function imageNote(result) {
+  if (result.pdf) return ' Pictures inside a PDF can\'t be taken out — add them with the Image button in the editor (or upload the Word/EPUB version of the book).';
+  const im = result.images;
+  if (!im) return '';
+  const notes = [];
+  if (im.added) notes.push(`${im.added} picture${im.added === 1 ? '' : 's'} added`);
+  if (im.unsupported) notes.push(`${im.unsupported} picture${im.unsupported === 1 ? ' is' : 's are'} in an old Windows drawing format phones can't show — in Word, right-click ${im.unsupported === 1 ? 'it' : 'each one'} → "Save as Picture" → PNG, then add it with the Image button`);
+  if (im.shapes) notes.push(`${im.shapes} diagram${im.shapes === 1 ? ' was' : 's were'} drawn with Word's shapes / SmartArt / charts, which can't be copied — in Word, right-click ${im.shapes === 1 ? 'it' : 'each one'} → "Save as Picture", then add it with the Image button`);
+  if (im.skipped) notes.push(`${im.skipped} picture${im.skipped === 1 ? '' : 's'} couldn't be saved${im.error ? ` (${escapeHtml(im.error)})` : ''}`);
+  return notes.length ? ' Pictures: ' + notes.join('; ') + '.' : '';
 }
 
 bookFileInput.addEventListener('change', async () => {
@@ -3092,7 +3329,10 @@ bookFileInput.addEventListener('change', async () => {
   statusEl.className = 'upload-status';
   statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Reading the book and finding its chapters…`;
   try {
-    const result = await parseBookFile(file);
+    const result = await parseBookFile(file, {
+      uploadImage: (blob) => uploadBookImage(blob, NEW_BOOK_IMAGE_FOLDER),
+      onProgress: (msg) => { statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> ${escapeHtml(msg)}`; },
+    });
     if (!result.chapters.length) throw new Error('no readable text found');
     initNewBookEditor();
     newBookEditor.setContent(sectionsToEditorContent(result.chapters));
@@ -3125,7 +3365,10 @@ replaceChaptersInput.addEventListener('change', async () => {
   statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Reading the book and finding its chapters…`;
   let result;
   try {
-    result = await parseBookFile(file);
+    result = await parseBookFile(file, {
+      uploadImage: (blob) => uploadBookImage(blob, bookId),
+      onProgress: (msg) => { statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> ${escapeHtml(msg)}`; },
+    });
     if (!result.chapters.length) throw new Error('no readable text found');
   } catch (e) {
     statusEl.className = 'upload-status warn';
@@ -3146,7 +3389,7 @@ replaceChaptersInput.addEventListener('change', async () => {
   const book = BOOKS.find(b => b.id === bookId);
   if (book) book.source_format = formatLabel;
   statusEl.style.color = 'var(--green)';
-  statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Replaced — the book now has ${rows.length} chapter${rows.length === 1 ? '' : 's'}.`;
+  statusEl.innerHTML = `<span class="fmt-badge">${formatLabel}</span> Replaced — the book now has ${rows.length} chapter${rows.length === 1 ? '' : 's'}.${imageNote(result)}`;
   showToast('Chapters replaced from the file.');
   if (contentModalBookId === bookId) await loadAndRenderChapters();
 });

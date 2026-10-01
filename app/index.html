@@ -714,6 +714,19 @@
   .reader-view.dark .page-content kl-red { color: #F28B82; } .reader-view.dark .page-content kl-blue { color: #8AB4F8; }
   .reader-view.dark .page-content kl-green { color: #81C995; } .reader-view.dark .page-content kl-gold { color: #F0C25E; }
   .reader-view.dark .page-content kl-purple { color: #C58AF9; } .reader-view.dark .page-content kl-grey { color: #A8A8A8; }
+  /* Pictures in the book (see imageBlockHtml) — sized in pixels, never split across pages */
+  .page-content .pf-figure { margin: 4px 0 14px; text-align: center; }
+  .page-content .pf-figure img { display: inline-block; max-width: 100%; object-fit: contain; border-radius: 2px; pointer-events: none; -webkit-user-drag: none; }
+  .page-content .pf-figure figcaption { font-family: var(--serif); font-size: 0.85em; font-style: italic; line-height: 1.4; margin-top: 6px; color: var(--text-on-parch); opacity: 0.8; }
+  .reader-view.dark .page-content .pf-figure figcaption { color: #DCD3BC; }
+  /* The cover page — the first page of every book */
+  .page-content .book-cover-page { height: 100%; display: flex; align-items: center; justify-content: center; }
+  .page-content .book-cover-page img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 8px 28px rgba(0,0,0,0.28); pointer-events: none; -webkit-user-drag: none; }
+  .page-content .bcp-card { height: 100%; max-height: 100%; aspect-ratio: 2 / 3; max-width: 100%; border-radius: 6px; box-shadow: 0 8px 28px rgba(0,0,0,0.28);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 22px; box-sizing: border-box; text-align: center; color: #F4ECDA; }
+  .page-content .bcp-title { font-family: var(--serif); font-size: 1.9em; font-weight: 700; line-height: 1.25; text-shadow: 0 1px 3px rgba(0,0,0,0.35); }
+  .page-content .bcp-rule { width: 56px; height: 2px; background: #F0C25E; margin: 20px 0 16px; }
+  .page-content .bcp-author { font-family: var(--sans); font-size: 0.95em; letter-spacing: 0.05em; opacity: 0.9; }
   /* The book's Contents page (see contentsEntries): one tappable line per chapter */
   .page-content p.pf-toc {
     text-align: left; text-indent: 0; margin-bottom: 0; padding: 9px 2px;
@@ -1336,6 +1349,7 @@ async function loadBooks() {
     progress: progressMap[b.id]?.percent || 0,
     _resumeChapterPosition: progressMap[b.id]?.chapter_position || 0,
     _resumeParaPosition: progressMap[b.id]?.para_position || 0,
+    _hasProgress: !!progressMap[b.id],
     _chaptersLoaded: false,
     chapters: [],
   }));
@@ -1515,7 +1529,7 @@ async function openBook(id) {
     currentBook.chapters = (chapters || []).map(c => ({
       label: sanitizeInline(c.label || ''),
       title: sanitizeInline(c.title || ''),
-      paras: (c.content || '').split(/\n\s*\n/).filter(p => p.trim()).map(parseStoredPara),
+      paras: (c.content || '').split(/\n\s*\n/).filter(p => p.trim()).map(parseStoredPara).filter(p => !p.skip),
     }));
     currentBook._chaptersLoaded = true;
   }
@@ -1529,7 +1543,8 @@ async function openBook(id) {
   document.getElementById('readerTitleMini').textContent = currentBook.title;
   buildWatermark();
   paginateBook();
-  currentPageIdx = findPageIndexForAnchor({ chapterIdx: currentChapterIdx, paraIdx: currentBook._resumeParaPosition || 0 });
+  // A first-time reader starts at the cover; anyone else carries on where they left off.
+  currentPageIdx = currentBook._hasProgress ? findPageIndexForAnchor({ chapterIdx: currentChapterIdx, paraIdx: currentBook._resumeParaPosition || 0 }) : 0;
   renderCurrentPage();
 }
 
@@ -1557,6 +1572,7 @@ function saveReadingProgress() {
   const percent = GLOBAL_PAGES.length > 1 ? Math.round((currentPageIdx / (GLOBAL_PAGES.length - 1)) * 100) : 100;
   const paraPosition = GLOBAL_PAGES[currentPageIdx]?.startPara || 0;
   currentBook.progress = percent;
+  if (currentPageIdx > 0) currentBook._hasProgress = true;
   currentBook._resumeChapterPosition = currentChapterIdx;
   currentBook._resumeParaPosition = paraPosition;
   pendingProgressRow = { reader_id: currentReader.id, book_id: currentBook.id, chapter_position: currentChapterIdx, para_position: paraPosition, percent };
@@ -1644,7 +1660,20 @@ function sanitizeInline(raw) {
   return walk(tpl.content);
 }
 
+/* Pictures (admin editor / uploaded Word & EPUB files) are a paragraph of their own:
+   [[image:URL|WIDTHxHEIGHT|small|medium|full|caption]]. Only pictures stored in the
+   library's own storage are shown. */
+const IMAGE_MARKER_RE = /^\[\[image:([^|\]\s]+)\|(\d+)x(\d+)\|(small|medium|full)\|([^\]|]*)\]\]$/;
+const BOOK_IMAGE_BASE = (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : 'https://orddbbrlxdnynbwhcqrm.supabase.co') + '/storage/v1/object/public/covers/';
+const IMAGE_SIZE_SHARE = { small: 0.4, medium: 0.7, full: 1 };
+let IMAGE_BOX = { w: 560, h: 600 }; // space for a picture on a page — set by paginateBook
+
 function parseStoredPara(raw) {
+  const im = raw.trim().match(IMAGE_MARKER_RE);
+  if (im) {
+    if (!im[1].startsWith(BOOK_IMAGE_BASE) || /["'<>]/.test(im[1])) return { cls: '', html: '', skip: true };
+    return { cls: 'pf-image', html: '', image: { src: im[1], w: Number(im[2]) || 1, h: Number(im[3]) || 1, size: im[4], caption: escapeText(im[5].trim()) } };
+  }
   let cls = '', inner = raw.trim();
   const m = inner.match(/^<p(?:\s+class="([^"]*)")?\s*>([\s\S]*)<\/p>$/i);
   if (m) {
@@ -1745,10 +1774,33 @@ function splitParagraphToFit(el, para, minLines) {
   ];
 }
 
+/* A picture is sized in pixels from the page's space, so pagination knows its height
+   before it has loaded: its chosen share of the page width (never bigger than the picture
+   itself), and never taller than the page leaves room for. */
+function imageBlockHtml(img) {
+  const captionRoom = img.caption ? fontSize * 3.4 : 0;
+  const maxH = Math.max(60, IMAGE_BOX.h - captionRoom - 24);
+  let w = Math.min(img.w, IMAGE_BOX.w * (IMAGE_SIZE_SHARE[img.size] || 0.7));
+  let h = w * img.h / img.w;
+  if (h > maxH) { h = maxH; w = h * img.w / img.h; }
+  return `<figure class="pf-figure"><img src="${escapeText(img.src)}" alt="${img.caption}" draggable="false" style="width:${Math.round(w)}px;height:${Math.round(h)}px">`
+    + `${img.caption ? `<figcaption>${img.caption}</figcaption>` : ''}</figure>`;
+}
+
+// The book's first page: its cover picture, or a cover made from its colour, title and author.
+function coverPageHtml() {
+  const b = currentBook;
+  if (b.coverImage) return `<div class="book-cover-page"><img src="${escapeText(b.coverImage)}" alt="${escapeText(b.title || '')}" draggable="false"></div>`;
+  return `<div class="book-cover-page"><div class="bcp-card" style="background:${escapeText(b.coverColor || '#1F3A5F')}">`
+    + `<div class="bcp-title" dir="auto">${escapeText(b.title || '')}</div><div class="bcp-rule"></div><div class="bcp-author" dir="auto">${escapeText(b.author || '')}</div></div></div>`;
+}
+
 function blockHtml(b) {
+  if (b.type === 'cover') return coverPageHtml();
   if (b.type === 'header') {
     return `<div class="chapter-head">${chapterHeaderHtml(b.label, b.title)}</div>`;
   }
+  if (b.para.image) return imageBlockHtml(b.para.image);
   const jump = b.para.jumpTo != null ? ` data-jump-chapter="${b.para.jumpTo}" role="button" tabindex="0"` : '';
   return `<p${b.para.cls ? ` class="${b.para.cls}"` : ''}${jump}>${b.para.html}</p>`;
 }
@@ -1773,7 +1825,13 @@ function paginateBook() {
   // font metrics the page will actually render with, not whatever book was open before.
   document.getElementById('pageContent').className = 'page-content' + (currentBook.rtl ? ' rtl' : '') + (currentBook.devanagari ? ' devanagari' : '') + (currentBook.gurmukhi ? ' gurmukhi' : '');
   const el = preparePageMeasurer();
-  const pages = [];
+  // Room for a picture: the page's text area.
+  const cs = getComputedStyle(el);
+  const boxW = el.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+  const boxH = el.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+  if (boxW > 50 && boxH > 50) IMAGE_BOX = { w: boxW, h: boxH };
+  // Page 1 is the cover.
+  const pages = [{ blocks: [{ type: 'cover', chapterIdx: 0 }], chapterIdx: 0, startPara: 0 }];
   let blocks = [];
 
   const flush = () => {
@@ -1800,8 +1858,8 @@ function paginateBook() {
 
   const placePara = (block) => {
     if (tryPlace(block)) return;
-    // Contents lines are never split (they carry their own markup); they just move on.
-    const splittable = block.para.jumpTo == null;
+    // Contents lines and pictures are never split; they just move on to the next page.
+    const splittable = block.para.jumpTo == null && !block.para.image;
     const split = splittable && blocks.length ? splitParagraphToFit(el, block.para, 2) : null;
     const last = blocks[blocks.length - 1];
     const strandedHeading = last && blocks.length > 1 && last.type === 'para' && /\bpf-heading\b/.test(last.para.cls);
@@ -1866,7 +1924,7 @@ function findPageIndexForAnchor(anchor) {
   let best = -1;
   for (let i = 0; i < GLOBAL_PAGES.length; i++) {
     for (const b of GLOBAL_PAGES[i].blocks) {
-      if (b.chapterIdx !== anchor.chapterIdx) continue;
+      if (b.chapterIdx !== anchor.chapterIdx || b.type === 'cover') continue;
       if (b.type === 'header') { if (best === -1) best = i; continue; }
       if (b.paraIdx === paraIdx && !b.cont) return i;
       if (b.paraIdx <= paraIdx) best = i;
@@ -1877,7 +1935,7 @@ function findPageIndexForAnchor(anchor) {
 
 // First page where a chapter appears (its heading, or its first paragraph if it has none).
 function chapterStartPageIndex(chapterIdx) {
-  const i = GLOBAL_PAGES.findIndex(pg => pg.blocks.some(b => b.chapterIdx === chapterIdx));
+  const i = GLOBAL_PAGES.findIndex(pg => pg.blocks.some(b => b.chapterIdx === chapterIdx && b.type !== 'cover'));
   return i === -1 ? 0 : i;
 }
 
@@ -1910,6 +1968,8 @@ function renderCurrentPage() {
   slider.value = currentPageIdx;
   document.getElementById('arrowPrevBtn').disabled = currentPageIdx <= 0;
   document.getElementById('arrowNextBtn').disabled = currentPageIdx >= GLOBAL_PAGES.length - 1;
+  // Fetch the next page's pictures now, so turning the page is instant.
+  (GLOBAL_PAGES[currentPageIdx + 1]?.blocks || []).forEach(b => { if (b.para && b.para.image) new Image().src = b.para.image.src; });
   saveReadingProgress();
 }
 

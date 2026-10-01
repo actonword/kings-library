@@ -54,6 +54,15 @@ _original-mockups/   the original static demo files, kept for reference
   standard names (Preface, Copyright, Conclusion, About the Author…) and anything listed
   in the book’s own Contents page as separate sections; the Contents list itself is
   replaced by the automatic list. `sample_text` is generated from the first chapter.
+- Pictures are their own paragraph: `[[image:URL|WxH|small|medium|full|caption]]`. Files
+  are shrunk to ≤1600px, saved as WebP in the public `covers` bucket under
+  `book-images/<bookId or new-…>/`, and only URLs in that bucket are ever shown (editor,
+  admin preview and reader all check). Pictures come from the editor's Image button,
+  paste/drag, Word (`w:drawing`/`w:pict`; `.emf`/`.wmf` and Word shapes/SmartArt/charts
+  can't be converted and are reported) and EPUB (`<img>`, `<svg><image>`). PDFs: text
+  only. The reader sizes pictures in pixels and never splits one across pages.
+- The reader's page 1 is always the book's cover (`cover_image_url`, or a cover drawn
+  from `cover_color`, title and author). First-time readers start there.
 
 ## Help chatbot
 
