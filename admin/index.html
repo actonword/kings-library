@@ -167,6 +167,8 @@
   .chapter-preview .pv-break { font-family: var(--sans, sans-serif); font-size: 11px; color: #A07A2C; text-align: center; margin: 14px 0; border-top: 1px dashed #C79A42; padding-top: 6px; }
   .chapter-editor { margin-bottom: 10px; }
   .chapter-preview b { font-weight: 700; }
+  .chapter-preview kl-red { color: #B3261E; } .chapter-preview kl-blue { color: #1F5FA8; } .chapter-preview kl-green { color: #2E7D32; }
+  .chapter-preview kl-gold { color: #9A6A00; } .chapter-preview kl-purple { color: #6A3BA0; } .chapter-preview kl-grey { color: #6B6B6B; }
   .serial-no { color: var(--text-on-ink-dim); font-variant-numeric: tabular-nums; }
   .nav-count { margin-left: auto; min-width: 18px; padding: 1px 6px; border-radius: 10px; background: var(--gold-bright); color: #1B140A; font-size: 11px; font-weight: 700; text-align: center; }
   .review-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -1584,6 +1586,7 @@ function previewSanitizeInline(raw) {
       else if (n.nodeType === 1) {
         if (n.tagName === 'BR') out += '<br>';
         else if (PREVIEW_INLINE_TAGS[n.tagName]) out += `<${PREVIEW_INLINE_TAGS[n.tagName]}>${walk(n)}</${PREVIEW_INLINE_TAGS[n.tagName]}>`;
+        else if (/^KL-(RED|BLUE|GREEN|GOLD|PURPLE|GREY)$/.test(n.tagName)) { const t = n.tagName.toLowerCase(); out += `<${t}>${walk(n)}</${t}>`; }
         else out += walk(n);
       }
     });
@@ -2807,6 +2810,9 @@ function readDocxRPr(rPr) {
   if (wKid(rPr, 'i')) out.i = wOn(wKid(rPr, 'i'));
   const u = wKid(rPr, 'u'); if (u) out.u = wOn(u);
   const va = wKid(rPr, 'vertAlign'); if (va) out.va = wVal(va);
+  // Text colour → nearest palette colour (black/"auto" = normal text) — see admin/rich-editor.js.
+  const color = wKid(rPr, 'color');
+  if (color && window.KLEditor) { const c = KLEditor.paletteColor(wVal(color)); if (c !== undefined) out.color = c; }
   return out;
 }
 
@@ -2880,7 +2886,7 @@ async function parseDocxFile(file) {
         else if (n.localName === 'tab') piece = ' ';
         else if (n.localName === 'noBreakHyphen') piece = '-';
         else if ((n.localName === 'br' && wVal(n, 'type') !== 'page' && wVal(n, 'type') !== 'column') || n.localName === 'cr') piece = '<br>';
-        if (piece != null) segs.push({ t: piece, b: !!fmt.b, i: !!fmt.i, u: !!fmt.u, va: fmt.va || '' });
+        if (piece != null) segs.push({ t: piece, b: !!fmt.b, i: !!fmt.i, u: !!fmt.u, va: fmt.va || '', color: fmt.color || '' });
       }
     }
 
@@ -2888,7 +2894,7 @@ async function parseDocxFile(file) {
     const merged = [];
     for (const s of segs) {
       const last = merged[merged.length - 1];
-      if (last && last.b === s.b && last.i === s.i && last.u === s.u && last.va === s.va) last.t += s.t;
+      if (last && last.b === s.b && last.i === s.i && last.u === s.u && last.va === s.va && last.color === s.color) last.t += s.t;
       else merged.push({ ...s });
     }
     let html = '', plain = '';
@@ -2903,6 +2909,7 @@ async function parseDocxFile(file) {
       if (s.u) t = `<u>${t}</u>`;
       if (s.i) t = `<i>${t}</i>`;
       if (s.b) t = `<b>${t}</b>`;
+      if (s.color) t = `<kl-${s.color}>${t}</kl-${s.color}>`;
       html += t;
     }
     html = html.replace(/^(\s|<br>)+|(\s|<br>)+$/g, '');
