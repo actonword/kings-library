@@ -1,6 +1,7 @@
 /* Rich text editor for book content (admin panel).
    Edits the same stored format the reader app displays: paragraphs separated by blank
-   lines, each either inline text (<b> <i> <u> <sup> <sub> <br>, colours as <kl-red> etc.) or wrapped as
+   lines, each either inline text (<b> <i> <u> <sup> <sub> <br>, colours as <kl-red> etc., text sizes
+   as <kl-small> <kl-large> <kl-xl> <kl-xxl>) or wrapped as
    <p class="…"> with layout classes, plus two marker paragraphs:
      [[pagebreak]]  — the reader starts a new page here
      [[contents]]   — the reader shows the book's chapter list here
@@ -36,6 +37,15 @@
   .kle-swatch-default { grid-column: 1 / -1; height: 28px; border-radius: 6px; border: 1px solid rgba(233,226,208,0.25); background: none; color: #E9E2D0; cursor: pointer; font: 600 12px 'Inter', sans-serif; }
   .kle-editor kl-red { color: #B3261E; } .kle-editor kl-blue { color: #1F5FA8; } .kle-editor kl-green { color: #2E7D32; }
   .kle-editor kl-gold { color: #9A6A00; } .kle-editor kl-purple { color: #6A3BA0; } .kle-editor kl-grey { color: #6B6B6B; }
+  /* In pixels (the editor's text is 16px) so a size inside another size doesn't multiply. */
+  .kle-editor kl-small, .kle-editor font[size="1"], .kle-editor font[size="2"] { font-size: 13.6px; }
+  .kle-editor font[size="3"] { font-size: 16px; }
+  .kle-editor kl-large, .kle-editor font[size="4"] { font-size: 19.2px; }
+  .kle-editor kl-xl, .kle-editor font[size="5"] { font-size: 23.2px; }
+  .kle-editor kl-xxl, .kle-editor font[size="6"], .kle-editor font[size="7"] { font-size: 28.8px; }
+  .kle-btn[data-cmd="smaller"], .kle-btn[data-cmd="bigger"] { font-family: Georgia, serif; font-weight: 700; padding: 0 7px; }
+  .kle-btn[data-cmd="smaller"] small { font-size: 11px; } .kle-btn[data-cmd="bigger"] span { font-size: 17px; }
+  .kle-size-name { align-self: center; min-width: 52px; text-align: center; font: 600 11px 'Inter', sans-serif; color: #93A0A8; }
   .kle-toolbar { border-radius: 10px 10px 0 0; display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border-bottom: 1px solid rgba(233,226,208,0.1); background: #141F2C; position: sticky; top: 0; z-index: 2; }
   .kle-btn { min-width: 32px; height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid transparent; background: none; color: #E9E2D0; cursor: pointer; font: 600 13px/1 'Inter', sans-serif; }
   .kle-btn:hover { background: rgba(240,194,94,0.1); }
@@ -155,6 +165,15 @@
   const DEFAULT_COLOR = '#010203'; // what the "Default" swatch applies — read back as "no colour"
   const hex = (rgb) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
 
+  // ---------- Text size ----------
+  // Five steps, stored as <kl-small> <kl-large> <kl-xl> <kl-xxl> (normal = no tag). Sizes are
+  // relative, so the reader's own text-size setting still makes everything bigger or smaller.
+  const SIZE_STEPS = ['small', '', 'large', 'xl', 'xxl'];
+  const SIZE_NAMES = { small: 'Small', '': 'Normal', large: 'Large', xl: 'Larger', xxl: 'Largest' };
+  // The browser's "font size" command (1–7) is how the A− / A+ buttons size the selection.
+  const FONT_TAG_SIZE = { 1: 'small', 2: 'small', 3: '', 4: 'large', 5: 'xl', 6: 'xxl', 7: 'xxl' };
+  const SIZE_FONT_TAG = { small: '2', '': '3', large: '4', xl: '5', xxl: '6' };
+
   function parseColor(s) {
     s = String(s || '').trim().toLowerCase();
     let m = s.match(/^#?([0-9a-f]{6})$/);
@@ -212,6 +231,8 @@
       if (tag === 'SUB' || st.verticalAlign === 'sub') f.va = 'sub';
       const kl = tag.match(/^KL-([A-Z]+)$/);
       if (kl && PALETTE[kl[1].toLowerCase()]) f.color = kl[1].toLowerCase();
+      if (kl && SIZE_STEPS.includes(kl[1].toLowerCase())) f.sz = kl[1].toLowerCase();
+      if (tag === 'FONT' && n.getAttribute('size') in FONT_TAG_SIZE) f.sz = FONT_TAG_SIZE[n.getAttribute('size')];
       const c = paletteColor(n.getAttribute('color') || st.color);
       if (c !== undefined) f.color = c;
       collectRuns(n, f, runs);
@@ -219,7 +240,7 @@
     return runs;
   }
   function renderRuns(runs) {
-    const same = (a, b) => !a.br && !b.br && !!a.b === !!b.b && !!a.i === !!b.i && !!a.u === !!b.u && (a.va || '') === (b.va || '') && (a.color || '') === (b.color || '');
+    const same = (a, b) => !a.br && !b.br && !!a.b === !!b.b && !!a.i === !!b.i && !!a.u === !!b.u && (a.va || '') === (b.va || '') && (a.color || '') === (b.color || '') && (a.sz || '') === (b.sz || '');
     const merged = [];
     runs.forEach((r) => { const last = merged[merged.length - 1]; if (last && same(last, r)) last.t += r.t; else merged.push({ ...r }); });
     return merged.map((r) => {
@@ -230,6 +251,7 @@
       if (r.u) h = `<u>${h}</u>`;
       if (r.i) h = `<i>${h}</i>`;
       if (r.b) h = `<b>${h}</b>`;
+      if (r.sz) h = `<kl-${r.sz}>${h}</kl-${r.sz}>`;
       if (r.color) h = `<kl-${r.color}>${h}</kl-${r.color}>`;
       return h;
     }).join('');
@@ -350,6 +372,9 @@
           <button type="button" class="kle-btn" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
           <button type="button" class="kle-btn" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
           <button type="button" class="kle-btn" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+          <button type="button" class="kle-btn" data-cmd="smaller" title="Make the selected text smaller" aria-label="Smaller text"><small>A</small>−</button>
+          <span class="kle-size-name" title="Size of the text where the cursor is">Normal</span>
+          <button type="button" class="kle-btn" data-cmd="bigger" title="Make the selected text bigger" aria-label="Bigger text"><span>A</span>+</button>
           <span class="kle-color">
             <button type="button" class="kle-btn" data-cmd="colormenu" title="Text colour" aria-label="Text colour" aria-haspopup="true">A<span class="kle-color-bar" style="background:${hex(PALETTE.red)}"></span></button>
             <div class="kle-palette" hidden>
@@ -425,7 +450,22 @@
       if (!ed.firstChild) ed.innerHTML = '<p><br></p>';
     };
 
+    // Text size where the cursor is: the nearest size tag around it ('' = normal).
+    const sizeName = bar.querySelector('.kle-size-name');
+    const sizeAtCursor = () => {
+      const sel = window.getSelection();
+      let n = sel.rangeCount ? sel.focusNode : null;
+      for (; n && n !== ed; n = n.parentNode) {
+        if (n.nodeType !== 1) continue;
+        const kl = n.tagName.match(/^KL-(SMALL|LARGE|XL|XXL)$/);
+        if (kl) return kl[1].toLowerCase();
+        if (n.tagName === 'FONT' && n.getAttribute('size') in FONT_TAG_SIZE) return FONT_TAG_SIZE[n.getAttribute('size')];
+      }
+      return '';
+    };
+
     const updateState = () => {
+      sizeName.textContent = SIZE_NAMES[sizeAtCursor()];
       const blocks = currentBlocks();
       const first = blocks[0];
       bar.querySelectorAll('[data-align]').forEach((btn) => {
@@ -454,6 +494,13 @@
         blocks.forEach((p) => p.classList.toggle(btn.dataset.toggle, on));
       } else if (cmd === 'colormenu') {
         palette.hidden = !palette.hidden;
+        return;
+      } else if (cmd === 'smaller' || cmd === 'bigger') {
+        const step = SIZE_STEPS.indexOf(sizeAtCursor());
+        const next = SIZE_STEPS[Math.max(0, Math.min(SIZE_STEPS.length - 1, step + (cmd === 'bigger' ? 1 : -1)))];
+        try { document.execCommand('styleWithCSS', false, false); } catch (err) { /* ignore */ }
+        exec('fontSize', SIZE_FONT_TAG[next]);
+        sizeName.textContent = SIZE_NAMES[next];
         return;
       } else if (cmd === 'emojimenu') {
         emojiPop.hidden = !emojiPop.hidden;

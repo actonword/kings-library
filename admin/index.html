@@ -104,6 +104,25 @@
   .page-head h1 { font-family: var(--serif); font-size: 24px; font-weight: 600; margin-bottom: 4px; }
   .page-head p { font-size: 13px; color: var(--text-on-ink-dim); }
 
+  /* Help page */
+  .help-search { width: 100%; max-width: 460px; margin-bottom: 18px; }
+  .help-group { margin-bottom: 22px; }
+  .help-group h3 { font-family: var(--serif); font-size: 15px; font-weight: 600; margin-bottom: 8px; color: var(--gold-bright); }
+  .help-item { background: var(--ink-soft); border: 1px solid rgba(233,226,208,0.07); border-radius: 8px; margin-bottom: 6px; }
+  body.light-admin .help-item { border-color: rgba(36,30,20,0.08); }
+  .help-item summary { cursor: pointer; padding: 12px 14px; font-size: 13.5px; font-weight: 600; list-style: none; display: flex; gap: 10px; align-items: center; }
+  .help-item summary::-webkit-details-marker { display: none; }
+  .help-item summary::before { content: '›'; font-size: 18px; line-height: 1; color: var(--gold); transition: transform .15s; }
+  .help-item[open] summary::before { transform: rotate(90deg); }
+  .help-body { padding: 0 16px 14px 34px; font-size: 13px; line-height: 1.65; color: var(--text-on-ink-dim); }
+  .help-body ol, .help-body ul { padding-left: 18px; margin: 4px 0; }
+  .help-body li { margin-bottom: 3px; }
+  .help-body strong { color: var(--text-on-ink); }
+  .help-body .go { margin-top: 8px; }
+  .help-none { font-size: 13px; color: var(--text-on-ink-dim); display: none; }
+  .help-fab { position: fixed; right: 18px; bottom: 18px; z-index: 50; border: none; border-radius: 22px; padding: 10px 16px; cursor: pointer;
+    background: var(--gold); color: #1A1408; font: 700 13px var(--sans); box-shadow: 0 6px 18px rgba(0,0,0,0.3); }
+  .help-fab:hover { background: var(--gold-bright); }
   .view { display: none; }
   .view.active { display: block; }
 
@@ -169,6 +188,7 @@
   .chapter-preview b { font-weight: 700; }
   .chapter-preview kl-red { color: #B3261E; } .chapter-preview kl-blue { color: #1F5FA8; } .chapter-preview kl-green { color: #2E7D32; }
   .chapter-preview kl-gold { color: #9A6A00; } .chapter-preview kl-purple { color: #6A3BA0; } .chapter-preview kl-grey { color: #6B6B6B; }
+  .chapter-preview kl-small { font-size: 0.85em; } .chapter-preview kl-large { font-size: 1.2em; } .chapter-preview kl-xl { font-size: 1.45em; } .chapter-preview kl-xxl { font-size: 1.8em; }
   .serial-no { color: var(--text-on-ink-dim); font-variant-numeric: tabular-nums; }
   .nav-count { margin-left: auto; min-width: 18px; padding: 1px 6px; border-radius: 10px; background: var(--gold-bright); color: #1B140A; font-size: 11px; font-weight: 700; text-align: center; }
   .review-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -359,6 +379,10 @@
     <button class="nav-item" data-view="settings" onclick="showView('settings')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.2 4.2l4.2 4.2m7.2 7.2 4.2 4.2M1 12h6m10 0h6M4.2 19.8l4.2-4.2m7.2-7.2 4.2-4.2"/></svg>
       Settings
+    </button>
+    <button class="nav-item" data-view="help" onclick="showView('help')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+      Help
     </button>
     <button class="nav-item" id="adminSignOutBtn" style="margin-top:auto;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
@@ -775,6 +799,170 @@
       <button class="btn btn-gold" onclick="saveSettings()">Save Settings</button>
     </div>
 
+    <!-- HELP -->
+    <div id="helpView" class="view">
+      <div class="page-head"><h1>Help</h1><p>Step-by-step guides for everything in this admin panel. Type a few words to find a topic, or tap a question to open it.</p></div>
+      <input type="search" id="helpSearch" class="help-search" placeholder="Search help — e.g. picture, OTP, price, page break…" oninput="filterHelp()">
+      <p class="help-none" id="helpNone">Nothing matches that. Try a shorter word (e.g. “book”, “email”, “picture”), or look under <strong>Something isn’t working</strong> below.</p>
+
+      <div class="help-group">
+        <h3>Books</h3>
+        <details class="help-item"><summary>Add a new book</summary><div class="help-body"><ol>
+          <li>Click <strong>Manage Books</strong> in the menu on the left.</li>
+          <li>Fill in <strong>Title</strong>, <strong>Author</strong> and <strong>Language</strong> (these three are required). Price and Description are optional.</li>
+          <li>Choose a <strong>Cover Color</strong>, or click the <strong>Cover Image</strong> box to upload a cover picture (JPG or PNG).</li>
+          <li>Click <strong>Upload the book file</strong> and choose your Word (.docx), EPUB, PDF or text file. Wait for the green message — the book appears in the editor below.</li>
+          <li>Check the editor. Each gold <strong>NEW SECTION</strong> line will start a new page in the app. Fix anything you need (see “Format the text”).</li>
+          <li>Click <strong>Add Book</strong> to put it live, or <strong>Save as Draft</strong> to keep it hidden for now.</li>
+        </ol><button class="btn btn-outline btn-tiny go" onclick="showView('books')">Go to Manage Books</button></div></details>
+
+        <details class="help-item"><summary>Which file should I upload? (Word, EPUB, PDF)</summary><div class="help-body"><ul>
+          <li><strong>Word (.docx) is best</strong> — it keeps bold, italics, colours, centring, verses and pictures.</li>
+          <li><strong>EPUB</strong> also keeps formatting and pictures.</li>
+          <li><strong>PDF</strong> gives text only (no pictures, less formatting). Use the Word version if you have it.</li>
+          <li>An old Word file (<strong>.doc</strong>) can’t be read: open it in Word → <strong>File → Save As</strong> → choose <strong>Word Document (.docx)</strong>, then upload that.</li>
+        </ul></div></details>
+
+        <details class="help-item"><summary>Change a book’s text after it’s saved</summary><div class="help-body"><ol>
+          <li>Go to <strong>Manage Books</strong>, find the book in the list and click <strong>Content</strong>.</li>
+          <li>Each section (Copyright, Chapter 1, About the Author…) has its own editor. Make your changes.</li>
+          <li>Click <strong>Save Changes</strong> under that section — each section is saved separately.</li>
+          <li>Click <strong>Preview</strong> to see it the way readers will.</li>
+        </ol>Use <strong>↑ ↓</strong> to move a section, <strong>Merge into previous</strong> to join it to the one before, <strong>Delete Section</strong> to remove it, and <strong>+ Add Another Section</strong> for a new one.</div></details>
+
+        <details class="help-item"><summary>Replace the whole book with a new file</summary><div class="help-body"><ol>
+          <li>Go to <strong>Manage Books</strong> → click <strong>Content</strong> on the book.</li>
+          <li>Click the box <strong>Replace all chapters from a book file</strong> and choose the file.</li>
+          <li>When asked, click <strong>OK</strong> to replace. All the old sections are replaced — this can’t be undone.</li>
+        </ol>The title, price, cover and readers’ access stay the same.</div></details>
+
+        <details class="help-item"><summary>Sections and new pages (why something isn’t on its own page)</summary><div class="help-body"><ul>
+          <li>In the app, every <strong>section</strong> starts on a new page.</li>
+          <li>To make a heading start a new section: click in the heading line, then choose <strong>Section title (new page)</strong> in the first drop-down of the toolbar. Save.</li>
+          <li>To start a new page without a new section, put the cursor where it should break and click <strong>⤓ Page</strong>.</li>
+          <li>For a heading inside a chapter that should <em>not</em> start a new page, choose <strong>Sub-heading</strong>.</li>
+        </ul></div></details>
+
+        <details class="help-item"><summary>Format the text (bold, colour, size, centre, verses)</summary><div class="help-body"><ul>
+          <li>Select the words first, then click a toolbar button.</li>
+          <li><strong>B / I / U</strong> — bold, italic, underline.</li>
+          <li><strong>A− / A+</strong> — make the selected text smaller or bigger (5 sizes; the current size is shown between the buttons). Readers can still make all text bigger in the app.</li>
+          <li><strong>A</strong> with the coloured bar — text colour. <strong>Default colour</strong> takes the colour off.</li>
+          <li>The four line icons — align left, centre, right, or justify (straight edges on both sides, the normal book look).</li>
+          <li><strong>¶→</strong> indents the first line · <strong>⇥</strong> indents the whole paragraph (quotes, verses) · <strong>≣</strong> verse line (no gap after it).</li>
+          <li><strong>↵</strong> line break inside a paragraph (same as Shift+Enter) · <strong>⌫ Format</strong> removes formatting · <strong>↶ ↷</strong> undo / redo.</li>
+        </ul></div></details>
+
+        <details class="help-item"><summary>Add a picture, diagram or clipart</summary><div class="help-body"><ol>
+          <li>Click in the text where the picture should go.</li>
+          <li>Click <strong>Image</strong> in the toolbar and choose the picture (you can also paste a picture, or drag one into the text).</li>
+          <li>Under the picture, choose <strong>Small</strong>, <strong>Medium</strong> or <strong>Full width</strong>, and type a caption if you want one.</li>
+          <li>Click <strong>Save Changes</strong> (or Add Book).</li>
+        </ol>Pictures inside an uploaded Word or EPUB file come in by themselves. To delete a picture, click <strong>Remove</strong> under it.</div></details>
+
+        <details class="help-item"><summary>A picture from Word didn’t come in</summary><div class="help-body"><ul>
+          <li><strong>Diagrams made with Word’s shapes, SmartArt or charts</strong>, and some <strong>very old picture types</strong>, can’t be copied. In Word: right-click the diagram → <strong>Save as Picture</strong> → save as PNG. Then add it with the <strong>Image</strong> button.</li>
+          <li><strong>Copy–paste from Word</strong> can’t bring pictures (Word keeps them on your computer). Upload the .docx file instead, or add each picture with the <strong>Image</strong> button.</li>
+          <li><strong>PDF</strong> files never bring pictures — add them with the Image button.</li>
+          <li>The message after uploading tells you how many pictures were added or skipped.</li>
+        </ul></div></details>
+
+        <details class="help-item"><summary>Add an emoji</summary><div class="help-body">Click the <strong>☺</strong> button in the toolbar and pick one. For any other emoji, press the <strong>Windows key + . (full stop)</strong> on your keyboard. Emojis in Word files come in by themselves.</div></details>
+
+        <details class="help-item"><summary>Cover picture and the cover page</summary><div class="help-body"><ul>
+          <li>Every book opens in the app on its <strong>cover page</strong>. It uses the cover picture, or — if there isn’t one — the cover colour with the title and author.</li>
+          <li>To change the cover: <strong>Manage Books</strong> → <strong>Content</strong> on the book → click the cover image box at the top and choose a new picture → <strong>Save Book Details</strong>.</li>
+          <li>If your Word file also has the cover as its first page, the cover shows twice — click <strong>Remove</strong> on that first picture in the editor and save.</li>
+        </ul></div></details>
+
+        <details class="help-item"><summary>Hide a book, or show it again (Draft / Publish)</summary><div class="help-body"><ul>
+          <li><strong>Unpublish</strong> (in the list on <strong>Manage Books</strong>) hides a book from the website and app. Nothing is deleted.</li>
+          <li><strong>Publish</strong> shows it again.</li>
+          <li><strong>Delete</strong> removes the book completely, and readers who bought it lose access — only use it if you are sure.</li>
+        </ul>The same buttons work for podcasts.</div></details>
+
+        <details class="help-item"><summary>Change a price</summary><div class="help-body">In the list on <strong>Manage Books</strong> (or <strong>Manage Podcasts</strong>), type the new price in the price box next to the item and click outside the box — it saves by itself. Leave it empty if you haven’t decided.</div></details>
+      </div>
+
+      <div class="help-group">
+        <h3>Podcasts</h3>
+        <details class="help-item"><summary>Add a podcast episode</summary><div class="help-body"><ol>
+          <li>Click <strong>Manage Podcasts</strong> on the left.</li>
+          <li>Fill in <strong>Title</strong>, <strong>Host</strong> and <strong>Language</strong>; add a cover colour or image.</li>
+          <li>Click <strong>Upload the audio file</strong> and choose the MP3, WAV or M4A file.</li>
+          <li>Click <strong>Add Podcast</strong> (or <strong>Save as Draft</strong>). Wait until it says it’s done — big audio files take a minute.</li>
+        </ol><button class="btn btn-outline btn-tiny go" onclick="showView('podcasts')">Go to Manage Podcasts</button></div></details>
+      </div>
+
+      <div class="help-group">
+        <h3>Readers &amp; sales</h3>
+        <details class="help-item"><summary>Someone paid — give them the book</summary><div class="help-body"><ol>
+          <li>Click <strong>Manage Users</strong> on the left.</li>
+          <li>Type the reader’s <strong>email</strong>.</li>
+          <li>Tick the books and/or podcasts they bought. Tick <strong>Free gift</strong> if they didn’t pay (it won’t count as a sale).</li>
+          <li>Click <strong>Grant Access &amp; Send App + OTP</strong>. They get an email with the app link and how to sign in.</li>
+        </ol><button class="btn btn-outline btn-tiny go" onclick="showView('readers')">Go to Manage Users</button></div></details>
+
+        <details class="help-item"><summary>A reader says they didn’t get the email or code</summary><div class="help-body"><ol>
+          <li>Ask them to look in <strong>Spam / Junk</strong> and <strong>Promotions</strong>.</li>
+          <li>Check the email address is spelled correctly in <strong>Manage Users</strong>. If it’s wrong, grant access again with the right address (and <strong>Delete</strong> the wrong one).</li>
+          <li>On the app’s sign-in screen they can ask for a new code. Codes expire after a short time — always use the newest one.</li>
+        </ol></div></details>
+
+        <details class="help-item"><summary>Take access away, or remove a reader</summary><div class="help-body">In <strong>Manage Users</strong>, find the reader (use the search box). <strong>Revoke All Access</strong> takes away their books and podcasts. <strong>Delete</strong> removes the reader completely — use it for wrong or unused email addresses.</div></details>
+
+        <details class="help-item"><summary>See everything that was done (Access Log)</summary><div class="help-body"><strong>Access Log</strong> lists every access given or taken away and every notification sent, newest first.</div></details>
+
+        <details class="help-item"><summary>Download people’s contact details</summary><div class="help-body">Click <strong>Contacts</strong>. It lists everyone who filled in their name, email and phone on the website (from a shared link or Buy Now). Click <strong>Download (Excel)</strong> to save the list.</div></details>
+
+        <details class="help-item"><summary>Approve or remove reviews</summary><div class="help-body">Click <strong>Reviews</strong>. Star ratings count straight away. A written review shows on the website only after you click <strong>Approve</strong>. Use <strong>Delete rating</strong> to remove one.</div></details>
+
+        <details class="help-item"><summary>Tell readers about a new book (notification)</summary><div class="help-body"><ol>
+          <li>Click <strong>Notifications</strong> on the left.</li>
+          <li>Write a <strong>Title</strong> and <strong>Message</strong>, pick the book if you want to link it, and choose who it goes to.</li>
+          <li>Click <strong>Send Notification</strong>. It appears under the bell in the app and is emailed too.</li>
+        </ol></div></details>
+      </div>
+
+      <div class="help-group">
+        <h3>Website &amp; settings</h3>
+        <details class="help-item"><summary>Change the contact email, phone, address or policies</summary><div class="help-body">Click <strong>Settings</strong>, change the boxes, then click <strong>Save Settings</strong> at the bottom. The Contact Us page and the policies update by themselves.</div></details>
+      </div>
+
+      <div class="help-group">
+        <h3>Something isn’t working</h3>
+        <details class="help-item"><summary>My change doesn’t show on the website or app</summary><div class="help-body"><ol>
+          <li>Make sure you clicked <strong>Save Changes</strong> / <strong>Save Book Details</strong> and saw the “saved” message.</li>
+          <li>Check the book isn’t a <strong>Draft</strong> (it would show a <strong>Publish</strong> button in the list on <strong>Manage Books</strong>).</li>
+          <li>Website: refresh the page. App on a phone: close the app fully (swipe it away) and open it again.</li>
+        </ol></div></details>
+
+        <details class="help-item"><summary>“Couldn’t read this file automatically”</summary><div class="help-body"><ul>
+          <li>Old <strong>.doc</strong> Word file → save it as <strong>.docx</strong> (File → Save As) and upload again.</li>
+          <li>A <strong>scanned</strong> PDF (pictures of pages) has no text to read — use the Word version.</li>
+          <li>Or open the file, select all the text (<strong>Ctrl+A</strong>), copy (<strong>Ctrl+C</strong>) and paste it into the editor (<strong>Ctrl+V</strong>). Formatting comes with it.</li>
+        </ul></div></details>
+
+        <details class="help-item"><summary>Chapters are joined together or split wrongly</summary><div class="help-body"><ul>
+          <li>Joined: click in the chapter’s heading line → choose <strong>Section title (new page)</strong> → save. It becomes its own section.</li>
+          <li>Split where it shouldn’t be: click <strong>Merge into previous</strong> on the extra section.</li>
+          <li>Tip: in Word, giving each chapter heading the <strong>Heading 1</strong> style makes the upload find chapters perfectly.</li>
+        </ul></div></details>
+
+        <details class="help-item"><summary>The app says the book has no content</summary><div class="help-body">Open <strong>Manage Books → Content</strong> for that book. If it says it has no sections, upload the file again with <strong>Replace all chapters from a book file</strong>.</div></details>
+
+        <details class="help-item"><summary>A box says I have unsaved changes</summary><div class="help-body">You edited a section and didn’t save it. Click <strong>Cancel</strong>, scroll to that section, click <strong>Save Changes</strong>, then try again.</div></details>
+
+        <details class="help-item"><summary>I’m stuck and nothing here helps</summary><div class="help-body"><ol>
+          <li>Take a screenshot of the screen, including any red or orange message (<strong>Windows key + Shift + S</strong>).</li>
+          <li>Write down what you clicked just before it happened.</li>
+          <li>Send both to the person who looks after your website. Nothing you do in this panel can break the website itself — at worst, a change can be undone or uploaded again.</li>
+        </ol></div></details>
+      </div>
+    </div>
+
+    <button class="help-fab" onclick="showView('help')" title="Step-by-step help for this admin panel">? Help</button>
+
   </div>
   </div>
 
@@ -839,6 +1027,25 @@ function showView(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const btn = document.querySelector(`.nav-item[data-view="${name}"]`);
   if (btn) btn.classList.add('active');
+}
+
+/* Help page search: shows the topics containing every word typed, opened. */
+function filterHelp() {
+  const words = document.getElementById('helpSearch').value.toLowerCase().split(/\s+/).filter(Boolean);
+  let shown = 0;
+  document.querySelectorAll('#helpView .help-group').forEach(group => {
+    let inGroup = 0;
+    group.querySelectorAll('.help-item').forEach(item => {
+      const text = item.textContent.toLowerCase();
+      const match = words.every(w => text.includes(w));
+      item.style.display = match ? '' : 'none';
+      item.open = match && words.length > 0;
+      if (match) inGroup++;
+    });
+    group.style.display = inGroup ? '' : 'none';
+    shown += inGroup;
+  });
+  document.getElementById('helpNone').style.display = shown ? 'none' : 'block';
 }
 
 function showToast(msg) {
@@ -1589,7 +1796,7 @@ function previewSanitizeInline(raw) {
       else if (n.nodeType === 1) {
         if (n.tagName === 'BR') out += '<br>';
         else if (PREVIEW_INLINE_TAGS[n.tagName]) out += `<${PREVIEW_INLINE_TAGS[n.tagName]}>${walk(n)}</${PREVIEW_INLINE_TAGS[n.tagName]}>`;
-        else if (/^KL-(RED|BLUE|GREEN|GOLD|PURPLE|GREY)$/.test(n.tagName)) { const t = n.tagName.toLowerCase(); out += `<${t}>${walk(n)}</${t}>`; }
+        else if (/^KL-(RED|BLUE|GREEN|GOLD|PURPLE|GREY|SMALL|LARGE|XL|XXL)$/.test(n.tagName)) { const t = n.tagName.toLowerCase(); out += `<${t}>${walk(n)}</${t}>`; }
         else out += walk(n);
       }
     });

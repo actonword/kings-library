@@ -714,6 +714,7 @@
   .reader-view.dark .page-content kl-red { color: #F28B82; } .reader-view.dark .page-content kl-blue { color: #8AB4F8; }
   .reader-view.dark .page-content kl-green { color: #81C995; } .reader-view.dark .page-content kl-gold { color: #F0C25E; }
   .reader-view.dark .page-content kl-purple { color: #C58AF9; } .reader-view.dark .page-content kl-grey { color: #A8A8A8; }
+  .page-content kl-small { font-size: 0.85em; } .page-content kl-large { font-size: 1.2em; } .page-content kl-xl { font-size: 1.45em; line-height: 1.4; } .page-content kl-xxl { font-size: 1.8em; line-height: 1.3; }
   /* Pictures in the book (see imageBlockHtml) — sized in pixels, never split across pages */
   .page-content .pf-figure { margin: 4px 0 14px; text-align: center; }
   .page-content .pf-figure img { display: inline-block; max-width: 100%; object-fit: contain; border-radius: 2px; pointer-events: none; -webkit-user-drag: none; }
@@ -1633,6 +1634,8 @@ function measurerFits(el) {
 const INLINE_TAGS = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', SUP: 'sup', SUB: 'sub' };
 // Text colours from the admin editor — a fixed palette, coloured per theme in the CSS.
 const COLOR_TAGS = new Set(['KL-RED', 'KL-BLUE', 'KL-GREEN', 'KL-GOLD', 'KL-PURPLE', 'KL-GREY']);
+// Text sizes from the admin editor — relative, so the reader's text-size setting still applies.
+const SIZE_TAGS = new Set(['KL-SMALL', 'KL-LARGE', 'KL-XL', 'KL-XXL']);
 const PARA_CLASSES = new Set(['center', 'right', 'left', 'justify', 'indent', 'inset', 'tight', 'heading', 'section']);
 const PAGEBREAK_MARKER = '[[pagebreak]]';
 
@@ -1651,7 +1654,7 @@ function sanitizeInline(raw) {
       else if (n.nodeType === 1) {
         if (n.tagName === 'BR') out += '<br>';
         else if (INLINE_TAGS[n.tagName]) out += `<${INLINE_TAGS[n.tagName]}>${walk(n)}</${INLINE_TAGS[n.tagName]}>`;
-        else if (COLOR_TAGS.has(n.tagName)) { const t = n.tagName.toLowerCase(); out += `<${t}>${walk(n)}</${t}>`; }
+        else if (COLOR_TAGS.has(n.tagName) || SIZE_TAGS.has(n.tagName)) { const t = n.tagName.toLowerCase(); out += `<${t}>${walk(n)}</${t}>`; }
         else out += walk(n);
       }
     });
@@ -1703,7 +1706,7 @@ function balanceChunks(chunks) {
   let carry = [];
   return chunks.map(chunk => {
     const open = [...carry];
-    for (const [, close, tag] of chunk.matchAll(/<(\/?)(b|i|u|sup|sub|kl-(?:red|blue|green|gold|purple|grey))>/g)) {
+    for (const [, close, tag] of chunk.matchAll(/<(\/?)(b|i|u|sup|sub|kl-(?:red|blue|green|gold|purple|grey|small|large|xl|xxl))>/g)) {
       if (close) { const i = open.lastIndexOf(tag); if (i !== -1) open.splice(i, 1); }
       else open.push(tag);
     }
